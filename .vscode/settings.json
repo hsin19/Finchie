@@ -1,0 +1,10 @@
+{
+    "cSpell.words": [
+        "Finchie"
+    ],
+    "python.testing.pytestArgs": [
+        "services"
+    ],
+    "python.testing.unittestEnabled": false,
+    "python.testing.pytestEnabled": true
+}

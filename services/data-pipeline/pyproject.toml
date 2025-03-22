@@ -1,0 +1,16 @@
+[project]
+name = "finchie-data-pipeline"
+version = "0.1.0"
+description = "Automated ETL pipeline for extracting financial data from multiple sources, processing and loading it into Finchie's API"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "google-api-python-client>=2.165.0",
+    "google-auth-httplib2>=0.2.0",
+    "google-auth-oauthlib>=1.2.1",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.5",
+]

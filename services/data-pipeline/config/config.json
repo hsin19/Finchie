@@ -1,0 +1,25 @@
+{
+    "extractor": {
+        "source": ["gmail"],
+        "gmail": {
+            "query": "from:service@mail.chinatrust.com.tw",
+            "credentials_path": "credentials.json",
+            "token_path": "token.json"
+        }
+    },
+    "output_dir": "emails",
+    "max_results": 10,
+    "loader": {
+        "source": ["api"],
+        "api": {
+            "endpoint": "https://example.com/api/bills",
+            "headers": {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            },
+            "auth": ["username", "password"]
+        }
+    },
+    "log_level": "INFO",
+    "dry_run": false
+} 
