@@ -16,7 +16,7 @@ Finchie is a personal financial data integration tool that automatically collect
 
 The Finchie system is organized into three interconnected services under a `services` directory, designed with a modular approach and deployed independently:
 
-### 📡 Data Pipeline
+### 📡 [Data Pipeline](services/data-pipeline/)
 Executes an automated ETL process to extract financial data from multiple sources, transform it into structured data, and load it into the API via RESTful HTTP requests for permanent storage.
 
 - **Python**: Data extraction and processing  
