@@ -1,14 +1,12 @@
-from __future__ import print_function
-
+import base64
+import json
+import logging
 import os
 import os.path
-import logging
 import sys
-import json
-import base64
-from datetime import datetime
 from dataclasses import dataclass
-from typing import Dict, List, Any, Union
+from datetime import datetime
+from typing import Any
 
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -16,9 +14,7 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
-SCOPES = [
-    "https://www.googleapis.com/auth/gmail.readonly"
-]  # Read-only permission, only reading emails
+SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]  # Read-only permission, only reading emails
 
 
 @dataclass
@@ -56,27 +52,25 @@ def _get_credentials(config: GmailConfig) -> Credentials | None:
                 logger.info("Credentials loaded from base64 encoded token")
                 return creds
         except Exception as e:
-            logger.error(f"Error loading credentials from token: {e}")
+            logger.error("Error loading credentials from token: %s", e)
 
     # Read from file
     creds = None
     if os.path.exists(config.token_file):
         creds = Credentials.from_authorized_user_file(config.token_file, SCOPES)
-        logger.info(f"Credentials loaded from file: {config.token_file}")
+        logger.info("Credentials loaded from file: %s", config.token_file)
 
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
             logger.debug("Credentials refreshed")
         else:
-            flow = InstalledAppFlow.from_client_secrets_file(
-                config.credentials_file, SCOPES
-            )
+            flow = InstalledAppFlow.from_client_secrets_file(config.credentials_file, SCOPES)
             creds = flow.run_local_server(port=0)
-            logger.debug(f"Credentials obtained from user authentication")
+            logger.debug("Credentials obtained from user authentication")
         with open(config.token_file, "w") as token_file:
             token_file.write(creds.to_json())
-            logger.debug(f"Credentials saved to file: {config.token_file}")
+            logger.debug("Credentials saved to file: %s", config.token_file)
     return creds
 
 
@@ -84,9 +78,7 @@ def _save_message_data(service: Any, msg_id: str, msg_dir: str) -> None:
     """
     Get email details, content and attachments, and save to the specified directory.
     """
-    msg = (
-        service.users().messages().get(userId="me", id=msg_id, format="full").execute()
-    )
+    msg = service.users().messages().get(userId="me", id=msg_id, format="full").execute()
 
     # Save complete email information in JSON format
     with open(os.path.join(msg_dir, "message.json"), "w", encoding="utf-8") as f:
@@ -101,9 +93,7 @@ def _save_message_data(service: Any, msg_id: str, msg_dir: str) -> None:
         _save_message_body(payload["body"], msg_dir)
 
 
-def _save_message_parts(
-    service: Any, msg_id: str, msg_dir: str, parts: List[Dict[str, Any]]
-) -> None:
+def _save_message_parts(service: Any, msg_id: str, msg_dir: str, parts: list[dict[str, Any]]) -> None:
     """Recursively process email parts (including embedded HTML, plain text)."""
     for part in parts:
         _save_message_body(part, msg_dir)
@@ -112,7 +102,7 @@ def _save_message_parts(
             _save_message_parts(service, msg_id, msg_dir, part["parts"])
 
 
-def _save_message_body(part: Dict[str, Any], msg_dir: str) -> None:
+def _save_message_body(part: dict[str, Any], msg_dir: str) -> None:
     """Save the email body content."""
     if "body" not in part:
         return
@@ -134,14 +124,12 @@ def _save_message_body(part: Dict[str, Any], msg_dir: str) -> None:
         with open(os.path.join(msg_dir, "body.txt"), "w", encoding="utf-8") as f:
             f.write(data)
     else:
-        logger.warning(f"Unknown MIME type {mime_type}, saving as raw data.")
+        logger.warning("Unknown MIME type %s, saving as raw data.", mime_type)
         with open(os.path.join(msg_dir, "body_raw"), "wb") as f:
             f.write(data)
 
 
-def _save_attachment(
-    service: Any, msg_id: str, part: Dict[str, Any], msg_dir: str
-) -> None:
+def _save_attachment(service: Any, msg_id: str, part: dict[str, Any], msg_dir: str) -> None:
     """Save email attachments."""
     file_name = part.get("filename")
     if not file_name:
@@ -154,12 +142,12 @@ def _save_attachment(
 
     mime_type = part.get("mimeType")
     if mime_type in ["application/x-pkcs7-signature", "application/pkcs7-signature"]:
-        logger.debug(f"Skipping attachment '{file_name}' with MIME type '{mime_type}'")
+        logger.debug("Skipping attachment '%s' with MIME type '%s'", file_name, mime_type)
         return
 
     body = part.get("body", {})
     if "attachmentId" not in body:
-        logger.warning(f"Attachment '{file_name}' does not have attachmentId.")
+        logger.warning("Attachment '%s' does not have attachmentId.", file_name)
         return
 
     attachment_id = body["attachmentId"]
@@ -168,36 +156,28 @@ def _save_attachment(
     headers = part.get("headers", [])
     content_disposition = _get_header(headers, "Content-Disposition")
     if "attachment" not in content_disposition.lower():
-        logger.debug(
-            f"Skipping attachment '{file_name}' with Content Disposition is '{content_disposition}'"
-        )
+        logger.debug("Skipping attachment '%s' with Content Disposition is '%s'", file_name, content_disposition)
         return
 
     try:
-        file_data = (
-            service.users()
-            .messages()
-            .attachments()
-            .get(userId="me", messageId=msg_id, id=attachment_id)
-            .execute()
-        )
+        file_data = service.users().messages().attachments().get(userId="me", messageId=msg_id, id=attachment_id).execute()
         raw = base64.urlsafe_b64decode(file_data["data"].encode("UTF-8"))
         file_path = os.path.join(msg_dir, file_name)
         with open(file_path, "wb") as f:
             f.write(raw)
-        logger.debug(f"Attachment '{part['filename']}' saved to {file_path}")
+        logger.debug("Attachment '%s' saved to %s", part["filename"], file_path)
     except HttpError as error:
-        logger.error(f"Error downloading attachment '{part['filename']}': {error}")
+        logger.error("Error downloading attachment '%s': %s", part["filename"], error)
 
 
-def _get_header(headers: List[Dict[str, str]], name: str) -> str:
+def _get_header(headers: list[dict[str, str]], name: str) -> str:
     for h in headers:
         if h.get("name", "").lower() == name.lower():
             return h.get("value", "")
     return ""
 
 
-def process_gmail_messages(query: str, config: GmailConfig | None = None) -> List[str]:
+def process_gmail_messages(query: str, config: GmailConfig | None = None) -> list[str]:
     """
     Extract Gmail messages that match the query criteria and save them to local directories.
 
@@ -228,7 +208,7 @@ def process_gmail_messages(query: str, config: GmailConfig | None = None) -> Lis
     # Call Gmail API to list messages matching the criteria.
     results = service.users().messages().list(userId="me", q=query).execute()
     messages = results.get("messages", [])
-    logger.debug(f"Found {len(messages)} messages.")
+    logger.debug("Found %d messages.", len(messages))
 
     if not messages:
         logger.info("No messages found with the specified criteria.")
@@ -238,25 +218,23 @@ def process_gmail_messages(query: str, config: GmailConfig | None = None) -> Lis
     message_folders = []
 
     for message in messages:
-        logger.debug(f"Processing message: {message['id']}")
+        logger.debug("Processing message: %s", message["id"])
         msg_dir = os.path.join(config.output_dir, tstamp, message["id"])
         os.makedirs(msg_dir, exist_ok=True)
-        logger.debug(f"Message directory created: {msg_dir}")
+        logger.debug("Message directory created: %s", msg_dir)
 
         _save_message_data(service, message["id"], msg_dir)
         message_folders.append(msg_dir)
 
-    logger.info(f"Successfully processed {len(messages)} messages")
+    logger.info("Successfully processed %d messages", len(messages))
     return message_folders
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     # Set up logging
     logger.setLevel(logging.DEBUG)
     handler = logging.StreamHandler(sys.stdout)
-    formatter = logging.Formatter(
-        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    )
+    formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
     handler.setFormatter(formatter)
     logger.addHandler(handler)
 
@@ -267,8 +245,6 @@ if __name__ == "__main__":
 
     message_folders = process_gmail_messages(
         "label:bill after:2025/3/01 before:2025/3/25",
-        GmailConfig(
-            base64_token=base64_token
-        ),
+        GmailConfig(base64_token=base64_token),
     )
     print(f"Successfully extracted data to: {', '.join(message_folders)}")

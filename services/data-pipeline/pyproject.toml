@@ -15,4 +15,30 @@ dev = [
     "pytest>=8.3.5",
     "pytest-cov>=6.0.0",
     "pytest-mock>=3.14.0",
+    "ruff>=0.11.2",
 ]
+
+[tool.ruff]
+line-length = 140
+
+[tool.ruff.format]
+docstring-code-format = true
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle Error
+    "W",   # pycodestyle Warning
+    "F",   # Pyflakes
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "SIM", # flake8-simplify
+    "I",   # isort
+    "N",   # pep8-naming
+    "G",   # flake8-logging-format
+    "LOG", # flake8-logging
+    "PT",  # flake8-pytest-style
+]
+ignore = ["F401"]
+
+[tool.ruff.lint.isort]
+combine-as-imports = true
