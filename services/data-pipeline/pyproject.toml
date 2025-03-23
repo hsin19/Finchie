@@ -1,5 +1,5 @@
 [project]
-name = "finchie-data-pipeline"
+name = "finchie_data_pipeline"
 version = "0.1.0"
 description = "Automated ETL pipeline for extracting financial data from multiple sources, processing and loading it into Finchie's API"
 readme = "README.md"
@@ -13,4 +13,6 @@ dependencies = [
 [dependency-groups]
 dev = [
     "pytest>=8.3.5",
+    "pytest-cov>=6.0.0",
+    "pytest-mock>=3.14.0",
 ]

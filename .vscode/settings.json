@@ -2,9 +2,13 @@
     "cSpell.words": [
         "Finchie"
     ],
-    "python.testing.pytestArgs": [
-        "services"
-    ],
     "python.testing.unittestEnabled": false,
-    "python.testing.pytestEnabled": true
+    "python.testing.pytestEnabled": true,
+    "python-envs.pythonProjects": [
+        {
+            "path": "services/data-pipeline",
+            "envManager": "ms-python.python:venv",
+            "packageManager": "ms-python.python:pip"
+        }
+    ]
 }
