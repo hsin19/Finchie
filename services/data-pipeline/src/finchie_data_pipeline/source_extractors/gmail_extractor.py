@@ -3,7 +3,6 @@ import json
 import logging
 import os
 import os.path
-import sys
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
@@ -13,6 +12,8 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
+
+from finchie_data_pipeline.utils.logging_utils import setup_console_logger
 
 SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]  # Read-only permission, only reading emails
 
@@ -232,11 +233,7 @@ def process_gmail_messages(query: str, config: GmailConfig | None = None) -> lis
 
 if __name__ == "__main__":  # pragma: no cover
     # Set up logging
-    logger.setLevel(logging.DEBUG)
-    handler = logging.StreamHandler(sys.stdout)
-    formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-    handler.setFormatter(formatter)
-    logger.addHandler(handler)
+    setup_console_logger(logger)
 
     base64_token = ""
     # with open("config/secret/gmail/token.json", "r") as f:

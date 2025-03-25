@@ -8,6 +8,8 @@ from dataclasses import dataclass
 
 import pdfplumber
 
+from finchie_data_pipeline.utils.logging_utils import setup_console_logger
+
 
 @dataclass
 class RawTransaction:
@@ -257,12 +259,7 @@ def extract_credit_card_statement(pdf_path: str, password: str | None = None) ->
 
 
 if __name__ == "__main__":  # pragma: no cover
-    # Set up logging
-    logger.setLevel(logging.DEBUG)
-    handler = logging.StreamHandler(sys.stdout)
-    formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-    handler.setFormatter(formatter)
-    logger.addHandler(handler)
+    setup_console_logger(logger)
 
     # Search for TSB_Creditcard_Estatement files in all subdirectories under data\extract\gmail
     search_pattern = os.path.join("data", "extract", "gmail", "**", "TSB_Creditcard_Estatement*.pdf")

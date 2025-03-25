@@ -1,6 +1,6 @@
 import pytest
 
-from src.finchie_data_pipeline.extract import gmail_extractor
+from finchie_data_pipeline.source_extractors import gmail_extractor
 
 # Import required members from the module
 GmailConfig = gmail_extractor.GmailConfig
