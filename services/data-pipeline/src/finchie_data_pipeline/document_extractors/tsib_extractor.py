@@ -5,10 +5,24 @@ import os
 import re
 import sys
 from dataclasses import dataclass
+from pathlib import Path
 
 import pdfplumber
 
+from finchie_data_pipeline.document_extractors.base import BaseBillDocumentExtractor
+from finchie_data_pipeline.models.credit_card_bill import CreditCardBill
 from finchie_data_pipeline.utils.logging_utils import setup_console_logger
+
+
+class TsibExtractor(BaseBillDocumentExtractor):
+    @classmethod
+    def can_handle(cls, folder_path: Path) -> bool:
+        # TODO
+        return True
+
+    def extract(self, folder_path: Path) -> CreditCardBill | None:
+        # TODO
+        return None
 
 
 @dataclass
