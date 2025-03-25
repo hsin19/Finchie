@@ -10,39 +10,38 @@ GmailExtractorError = gmail_extractor.GmailExtractorError
 process_gmail_messages = gmail_extractor.process_gmail_messages
 
 
-class TestGmailConfig:
-    def test_default_values(self):
-        """Test if the default values of GmailConfig are correctly set"""
-        config = GmailConfig()
-        assert config.base64_token is None
-        assert config.credentials_file == "config/secret/gmail/credentials.json"
-        assert config.token_file == "config/secret/gmail/token.json"
-        assert config.output_dir == "data/extract/gmail"
-
-    def test_custom_values(self):
-        """Test if GmailConfig can properly set custom values"""
-        config = GmailConfig(
-            base64_token="test_token", credentials_file="test_creds.json", token_file="test_token.json", output_dir="test_output"
-        )
-        assert config.base64_token == "test_token"
-        assert config.credentials_file == "test_creds.json"
-        assert config.token_file == "test_token.json"
-        assert config.output_dir == "test_output"
+def test_default_values():
+    """Test if the default values of GmailConfig are correctly set"""
+    config = GmailConfig()
+    assert config.base64_token is None
+    assert config.credentials_file == "config/secret/gmail/credentials.json"
+    assert config.token_file == "config/secret/gmail/token.json"
+    assert config.output_dir == "data/extract/gmail"
 
 
-class TestHelperFunctions:
-    def test_get_header(self):
-        """Test if the _get_header function can correctly extract email headers"""
-        headers = [
-            {"name": "From", "value": "sender@example.com"},
-            {"name": "To", "value": "recipient@example.com"},
-            {"name": "Subject", "value": "Test Email"},
-        ]
+def test_custom_values():
+    """Test if GmailConfig can properly set custom values"""
+    config = GmailConfig(
+        base64_token="test_token", credentials_file="test_creds.json", token_file="test_token.json", output_dir="test_output"
+    )
+    assert config.base64_token == "test_token"
+    assert config.credentials_file == "test_creds.json"
+    assert config.token_file == "test_token.json"
+    assert config.output_dir == "test_output"
 
-        assert _get_header(headers, "From") == "sender@example.com"
-        assert _get_header(headers, "To") == "recipient@example.com"
-        assert _get_header(headers, "Subject") == "Test Email"
-        assert _get_header(headers, "NonExistent") == ""
+
+def test_get_header():
+    """Test if the _get_header function can correctly extract email headers"""
+    headers = [
+        {"name": "From", "value": "sender@example.com"},
+        {"name": "To", "value": "recipient@example.com"},
+        {"name": "Subject", "value": "Test Email"},
+    ]
+
+    assert _get_header(headers, "From") == "sender@example.com"
+    assert _get_header(headers, "To") == "recipient@example.com"
+    assert _get_header(headers, "Subject") == "Test Email"
+    assert _get_header(headers, "NonExistent") == ""
 
 
 def test_get_credentials_from_file(mocker):

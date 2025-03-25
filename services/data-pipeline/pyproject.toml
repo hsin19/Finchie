@@ -8,6 +8,7 @@ dependencies = [
     "google-api-python-client>=2.165.0",
     "google-auth-httplib2>=0.2.0",
     "google-auth-oauthlib>=1.2.1",
+    "pdfplumber>=0.11.5",
 ]
 
 [dependency-groups]
@@ -37,6 +38,7 @@ select = [
     "G",   # flake8-logging-format
     "LOG", # flake8-logging
     "PT",  # flake8-pytest-style
+    "RUF", # Ruff-specific rules
 ]
 ignore = ["F401"]
 
