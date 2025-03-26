@@ -3,7 +3,7 @@
 ## Install
 
 - Install [uv](https://docs.astral.sh/uv/getting-started/installation/) for managing Python dependencies
-- Run `uv sync --project services/data-pipeline` to install dependencies
+- Run `uv sync --directory services/data-pipeline --dev` to install dependencies
 
 ## Gmail API
 

@@ -1,0 +1,50 @@
+name: Data Pipeline
+
+on:
+  push:
+    paths:
+      - 'services/data-pipeline/**'
+  pull_request:
+    paths:
+      - 'services/data-pipeline/**'
+
+permissions:
+  contents: read
+
+jobs:
+  unit-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout only the data-pipeline directory
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: services/data-pipeline
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+        
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: "services/data-pipeline/.python-version"
+
+      - name: Install dependencies
+        run: uv sync --directory services/data-pipeline --dev
+
+      - name: Run tests
+        run: uv run --directory services/data-pipeline pytest --cov --cov-branch --cov-report=xml --junitxml=junit.xml -o junit_family=legacy
+
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          flags: data-pipeline
+
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/test-results-action@v1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
