@@ -14,6 +14,7 @@ def sample_config_dict():
         "log_level": "info",
         "max_connections": 100,
         "tags": ["dev", "test", "local"],
+        "empty_value": None,
     }
 
 
@@ -32,23 +33,24 @@ def test_config_empty():
 def test_config_get_basic(config_instance):
     """Test basic get method"""
     assert config_instance.get("log_level") == "info"
-    assert config_instance.get("max_connections") == 100
+    assert config_instance.get("max_connections") == "100"
     assert config_instance.get("non_existent") is None
     assert config_instance.get("non_existent", "default") == "default"
+    assert config_instance.get("empty_value") is None
 
 
 def test_config_get_case_insensitive(config_instance):
     """Test case insensitivity of get method"""
     assert config_instance.get("LOG_LEVEL") == "info"
-    assert config_instance.get("Max_Connections") == 100
+    assert config_instance.get("Max_Connections") == "100"
 
 
 def test_config_get_nested(config_instance):
     """Test get method with nested keys"""
     assert config_instance.get("server.host") == "localhost"
-    assert config_instance.get("server.port") == 8080
-    assert config_instance.get("database.pool_size") == 5
-    assert config_instance.get("database.timeout") == 30.5
+    assert config_instance.get("server.port") == "8080"
+    assert config_instance.get("database.pool_size") == "5"
+    assert config_instance.get("database.timeout") == "30.5"
     assert config_instance.get("server.non_existent") is None
     assert config_instance.get("non_existent.key") is None
 
@@ -56,64 +58,7 @@ def test_config_get_nested(config_instance):
 def test_config_get_nested_case_insensitive(config_instance):
     """Test case insensitivity of get method with nested keys"""
     assert config_instance.get("SERVER.HOST") == "localhost"
-    assert config_instance.get("Database.Pool_Size") == 5
-
-
-def test_get_string(config_instance):
-    """Test get_string method"""
-    assert config_instance.get_string("log_level") == "info"
-    assert config_instance.get_string("max_connections") == "100"
-    assert config_instance.get_string("non_existent") == ""
-    assert config_instance.get_string("non_existent", "default") == "default"
-
-
-def test_get_int(config_instance):
-    """Test get_int method"""
-    assert config_instance.get_int("max_connections") == 100
-    assert config_instance.get_int("server.port") == 8080
-    assert config_instance.get_int("log_level") == 0  # Cannot convert to int, returns default
-    assert config_instance.get_int("non_existent") == 0
-    assert config_instance.get_int("non_existent", 42) == 42
-
-
-def test_get_float(config_instance):
-    """Test get_float method"""
-    assert config_instance.get_float("database.timeout") == 30.5
-    assert config_instance.get_float("max_connections") == 100.0
-    assert config_instance.get_float("log_level") == 0.0  # Cannot convert to float, returns default
-    assert config_instance.get_float("non_existent") == 0.0
-    assert config_instance.get_float("non_existent", 42.5) == 42.5
-
-
-def test_get_bool(config_instance):
-    """Test get_bool method"""
-    assert config_instance.get_bool("server.debug") is True
-    assert config_instance.get_bool("feature_flags.new_ui") is True
-    assert config_instance.get_bool("feature_flags.beta_features") is False
-    assert config_instance.get_bool("non_existent") is False
-    assert config_instance.get_bool("non_existent", True) is True
-
-    # Test various boolean representations
-    custom_config = Config(
-        {"true1": "true", "true2": "yes", "true3": "1", "true4": 1, "false1": "false", "false2": "no", "false3": "0", "false4": 0}
-    )
-
-    assert custom_config.get_bool("true1") is True
-    assert custom_config.get_bool("true2") is True
-    assert custom_config.get_bool("true3") is True
-    assert custom_config.get_bool("true4") is True
-    assert custom_config.get_bool("false1") is False
-    assert custom_config.get_bool("false2") is False
-    assert custom_config.get_bool("false3") is False
-    assert custom_config.get_bool("false4") is False
-
-
-def test_get_list(config_instance):
-    """Test get_list method"""
-    assert config_instance.get_list("tags") == ["dev", "test", "local"]
-    assert config_instance.get_list("non_existent") == []
-    assert config_instance.get_list("non_existent", ["default"]) == ["default"]
-    assert config_instance.get_list("log_level") == []  # Not a list type, returns default
+    assert config_instance.get("Database.Pool_Size") == "5"
 
 
 def test_get_section(config_instance):
@@ -121,8 +66,8 @@ def test_get_section(config_instance):
     server_section = config_instance.get_section("server")
     assert isinstance(server_section, Config)
     assert server_section.get("host") == "localhost"
-    assert server_section.get("port") == 8080
-    assert server_section.get("debug") is True
+    assert server_section.get("port") == "8080"
+    assert server_section.get("debug") == "True"
 
     # Test non-existent section
     non_existent_section = config_instance.get_section("non_existent")
@@ -138,10 +83,11 @@ def test_get_section(config_instance):
 def test_attribute_access(config_instance):
     """Test attribute access syntax"""
     assert config_instance.log_level == "info"
-    assert config_instance.max_connections == 100
+    assert config_instance.max_connections == "100"
     assert config_instance.server.host == "localhost"
-    assert config_instance.server.port == 8080
+    assert config_instance.server.port == "8080"
     assert config_instance.non_existent is None
+    assert config_instance.empty_value is None
 
     # Test case insensitivity of attribute access
     assert config_instance.LOG_LEVEL == "info"
@@ -151,10 +97,11 @@ def test_attribute_access(config_instance):
 def test_item_access(config_instance):
     """Test item access syntax"""
     assert config_instance["log_level"] == "info"
-    assert config_instance["max_connections"] == 100
+    assert config_instance["max_connections"] == "100"
     assert config_instance["server.host"] == "localhost"
-    assert config_instance["server.port"] == 8080
+    assert config_instance["server.port"] == "8080"
     assert config_instance["non_existent"] is None
+    assert config_instance["empty_value"] is None
 
     # Test case insensitivity of item access
     assert config_instance["LOG_LEVEL"] == "info"
@@ -163,15 +110,16 @@ def test_item_access(config_instance):
 
 def test_config_builder_with_dict():
     """Test with_dict method of ConfigBuilder"""
-    config_data = {"SERVER": {"HOST": "localhost", "PORT": 8080}, "DATABASE": "sqlite:///db.sqlite"}
+    config_data = {"SERVER": {"HOST": "localhost", "PORT": 8080}, "DATABASE": "sqlite:///db.sqlite", "NULL_VALUE": None}
 
     builder = ConfigBuilder()
     builder.with_dict(config_data)
     config = builder.build()
 
     assert config.get("server.host") == "localhost"
-    assert config.get("server.port") == 8080
+    assert config.get("server.port") == "8080"
     assert config.get("database") == "sqlite:///db.sqlite"
+    assert config.get("null_value") is None
 
 
 def test_config_builder_with_env(monkeypatch):
@@ -190,14 +138,13 @@ def test_config_builder_with_env(monkeypatch):
     assert config.get("server.port") == "9000"
     assert config.get("database_url") == "mysql://user:pass@localhost/db"
     assert config.get("debug") == "true"
-    assert config.get_bool("debug") is True
 
 
 def test_config_builder_with_json_file(tmp_path):
     """Test with_json_file method of ConfigBuilder"""
     # Create test JSON file
     config_file = tmp_path / "test_config.json"
-    config_data = {"server": {"host": "test-host", "port": 9000}, "database": "test-db", "debug": True}
+    config_data = {"server": {"host": "test-host", "port": 9000}, "database": "test-db", "debug": True, "null_value": None}
 
     with open(config_file, "w") as f:
         json.dump(config_data, f)
@@ -208,9 +155,10 @@ def test_config_builder_with_json_file(tmp_path):
     config = builder.build()
 
     assert config.get("server.host") == "test-host"
-    assert config.get("server.port") == 9000
+    assert config.get("server.port") == "9000"
     assert config.get("database") == "test-db"
-    assert config.get_bool("debug") is True
+    assert config.get("debug") == "True"
+    assert config.get("null_value") is None
 
     # Test reading non-existent file (non-optional)
     non_existent_file = tmp_path / "non_existent.json"
@@ -249,7 +197,7 @@ def test_config_builder_default_builder(monkeypatch, tmp_path):
         json.dump(base_config, f)
 
     # Create environment-specific config file
-    env_config = {"server": {"host": "test-host"}, "log_level": "debug"}
+    env_config = {"server": {"host": "test-host"}, "log_level": "debug", "null_value": None}
     with open(config_dir / "config.test.json", "w") as f:
         json.dump(env_config, f)
 
@@ -267,3 +215,4 @@ def test_config_builder_default_builder(monkeypatch, tmp_path):
     assert config.get("database") == "base-db"  # From base config
     assert config.get("log_level") == "debug"  # From env-specific file
     assert config.get("extra") == "value"  # From environment variable
+    assert config.get("null_value") is None  # From env-specific file

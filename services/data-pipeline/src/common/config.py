@@ -1,25 +1,26 @@
 import copy
 import json
 import os
-from typing import Any
+from typing import Any, Optional
 
 
-def _normalize_keys_to_lowercase(data: dict[str, Any]) -> dict[str, Any]:
+def _normalize_config(data: dict[str, Any]) -> dict[str, Any]:
     """
-    Recursively convert all dictionary keys to lowercase
+    Recursively convert all dictionary keys to lowercase and values to strings or None
     """
     result = {}
     for key, value in data.items():
+        key = key.lower()
         if isinstance(value, dict):
-            result[key.lower()] = _normalize_keys_to_lowercase(value)
+            result[key] = _normalize_config(value)
         else:
-            result[key.lower()] = value
+            result[key] = str(value) if value is not None else None
     return result
 
 
 class Config:
     """
-    Immutable configuration class with case-insensitive keys
+    Immutable configuration class with case-insensitive keys and string/None values
     """
 
     # Define __slots__ to prevent adding attributes after initialization
@@ -27,7 +28,7 @@ class Config:
 
     def __init__(self, config_data: dict[str, Any] | None = None, *, _skip_normalization: bool = False):
         """
-        Initialize Config with optional normalization
+        Initialize Config with normalized data (lowercase keys and string/None values)
 
         Args:
             config_data: The configuration dictionary
@@ -38,11 +39,13 @@ class Config:
         elif _skip_normalization:
             self._config = config_data
         else:
-            self._config = _normalize_keys_to_lowercase(config_data)
+            self._config = _normalize_config(config_data)
 
-    def get(self, key: str, default: Any = None) -> Any:
+    def get(self, key: str = "", default: Any = None) -> Any:
+        if not key:
+            return self._config
+
         key = key.lower()
-
         # Handle nested keys with dot notation
         if "." in key:
             parts = key.split(".")
@@ -58,62 +61,12 @@ class Config:
         else:
             return self._config.get(key, default)
 
-    def get_string(self, key: str, default: str = "") -> str:
-        value = self.get(key, default)
-        try:
-            return str(value)
-        except (TypeError, ValueError):
-            return default
-
-    def get_bool(self, key: str, default: bool = False) -> bool:
-        value = self.get(key, None)
-
-        if value is None:
-            return default
-
-        true_values = {"true", "yes", "1", 1}
-        false_values = {"false", "no", "0", 0}
-
-        if isinstance(value, str):
-            value = value.lower().strip()
-
-        if value in true_values:
-            return True
-        if value in false_values:
-            return False
-
-        return default
-
-    def get_int(self, key: str, default: int = 0) -> int:
-        value = self.get(key, None)
-        try:
-            if value is None:
-                return default
-            return int(value)
-        except (TypeError, ValueError):
-            return default
-
-    def get_float(self, key: str, default: float = 0.0) -> float:
-        value = self.get(key, None)
-        try:
-            if value is None:
-                return default
-            return float(value)
-        except (TypeError, ValueError):
-            return default
-
-    def get_list(self, key: str, default: list | None = None) -> list:
-        if default is None:
-            default = []
-
-        value = self.get(key, default)
-        if isinstance(value, list):
-            return value
-        return default
-
     def get_section(self, section_key: str) -> "Config":
-        section_value = self.get(section_key, {})
-
+        section_key = section_key.lower()
+        if section_key not in self._config:
+            return Config({})
+        
+        section_value = self._config[section_key]
         if not isinstance(section_value, dict):
             return Config({})
 
@@ -167,9 +120,8 @@ class ConfigBuilder:
         self._config = {}
 
     def with_dict(self, config_data: dict[str, Any]) -> "ConfigBuilder":
-        # Convert config_data keys to lowercase before updating
-        lowercase_config = _normalize_keys_to_lowercase(config_data)
-        self._deep_update(self._config, lowercase_config)
+        normalized_config = _normalize_config(config_data)
+        self._deep_update(self._config, normalized_config)
         return self
 
     def with_env(self) -> "ConfigBuilder":
