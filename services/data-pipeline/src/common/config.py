@@ -1,32 +1,36 @@
 import copy
+import dataclasses
+import importlib.util
 import json
 import os
-import importlib.util
 import sys
-from typing import Any, Optional
+from typing import Any
 
 
 def _normalize_config(data: dict[str, Any]) -> dict[str, Any]:
     """
     Recursively convert all dictionary keys to lowercase and values to strings or None
-    Excludes callables (functions, lambdas, etc.) and complex objects at any nesting level
+    Excludes callables (functions, lambdas, etc.) at any nesting level
     """
     result = {}
     for key, value in data.items():
         key = key.lower()
-        
+
         if callable(value):
             continue
-            
+
+        if dataclasses.is_dataclass(value):
+            value = dataclasses.asdict(value)
+
         if isinstance(value, dict):
             normalized_dict = _normalize_config(value)
             if normalized_dict:
                 result[key] = normalized_dict
-        elif value is None or isinstance(value, (str, int, float, bool)):
-            result[key] = str(value) if value is not None else None
+        elif value is None:
+            result[key] = None
         else:
             result[key] = str(value)
-            
+
     return result
 
 
@@ -77,7 +81,7 @@ class Config:
         section_key = section_key.lower()
         if section_key not in self._config:
             return Config({})
-        
+
         section_value = self._config[section_key]
         if not isinstance(section_value, dict):
             return Config({})
@@ -103,9 +107,10 @@ class Config:
 
         Loading order (later sources override earlier ones):
         1. Base config file (config/config.json)
-        2. Environment-specific config file (config.{ENV}.json)
-        3. Environment-specific Python file (config.{ENV}.py)
-        4. Environment variables
+        2. Base Python file (config/config.py)
+        3. Environment-specific config file (config.{ENV}.json)
+        4. Environment-specific Python file (config.{ENV}.py)
+        5. Environment variables
         """
         builder = ConfigBuilder()
 
@@ -116,9 +121,12 @@ class Config:
         base_config_path = os.path.join(config_dir, "config.json")
         builder.with_json_file(base_config_path, optional=True)
 
+        py_config_path = os.path.join(config_dir, "config.py")
+        builder.with_py_file(py_config_path, optional=True)
+
         env_config_path = os.path.join(config_dir, f"config.{env}.json")
         builder.with_json_file(env_config_path, optional=True)
-        
+
         env_py_config_path = os.path.join(config_dir, f"config.{env}.py")
         builder.with_py_file(env_py_config_path, optional=True)
 
@@ -176,25 +184,22 @@ class ConfigBuilder:
     def with_py_file(self, file_path: str, optional: bool = False) -> "ConfigBuilder":
         """
         Add configuration from a Python file
-        
+
         The Python file should define variables as uppercase constants:
-        
+
         Example:
-        ```
-        # config.dev.py
-        DEBUG = True
-        DATABASE = {
-            "HOST": "localhost",
-            "PORT": 5432
-        }
-        ```
+            ```
+            # config.dev.py
+            DEBUG = True
+            DATABASE = {"HOST": "localhost", "PORT": 5432}
+            ```
         Args:
             file_path: Path to the Python file
             optional: If True, do not raise an error if the file doesn't exist and return self
-        
+
         Returns:
             self for chaining
-        
+
         Raises:
             FileNotFoundError: If the file doesn't exist and optional is False
             ValueError: If there's an error loading or parsing the Python file
@@ -204,47 +209,47 @@ class ConfigBuilder:
                 return self
             else:
                 raise FileNotFoundError(f"Configuration file not found: {file_path}")
-        
+
         try:
             # Import the Python file as a module
-            module_name = os.path.basename(file_path).replace('.py', '')
+            module_name = os.path.basename(file_path).replace(".py", "")
             spec = importlib.util.spec_from_file_location(module_name, file_path)
             if spec is None:
                 raise ImportError(f"Could not load spec for module {module_name} from {file_path}")
-            
+
             module = importlib.util.module_from_spec(spec)
             sys.modules[module_name] = module
             spec.loader.exec_module(module)  # type: ignore
-            
+
             # Extract uppercase variables as configuration
             config_dict = {}
             for key in dir(module):
                 # Skip internal/private attributes
-                if key.startswith('__'):
+                if key.startswith("__"):
                     continue
-                
+
                 # Get only uppercase variables as config entries
                 if key.isupper():
                     config_dict[key] = getattr(module, key)
-            
+
             return self.with_dict(config_dict)
-            
+
         except Exception as e:
             if optional:
                 return self
-            raise ValueError(f"Error loading Python config file: {file_path}, error: {str(e)}") from e
+            raise ValueError(f"Error loading Python config file: {file_path}, error: {e!s}") from e
 
     def with_json_file(self, file_path: str, optional: bool = False) -> "ConfigBuilder":
         """
         Add configuration from a JSON file
-        
+
         Args:
             file_path: Path to the JSON file
             optional: If True, do not raise an error if the file doesn't exist and return self
-        
+
         Returns:
             self for chaining
-        
+
         Raises:
             FileNotFoundError: If the file doesn't exist and optional is False
             ValueError: If there's an error parsing the JSON file

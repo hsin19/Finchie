@@ -188,7 +188,7 @@ lowercase_value = "this should be ignored"
         f.write("This is not valid Python x y z")
 
     builder = ConfigBuilder()
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="Error loading Python config file"):
         builder.with_py_file(str(invalid_py_file))
 
 
@@ -291,6 +291,31 @@ lowercase_setting = "ignore me"
     assert config.get("configitem") is None
     assert config.get("_private_var") is None
     assert config.get("lowercase_setting") is None
+
+
+def test_py_file_with_dataclass(tmp_path):
+    """Test loading a Python config that uses dataclass values"""
+
+    # 定義一個 Python 設定檔(使用 dataclass)
+    config_py = tmp_path / "config_with_dataclass.py"
+    config_py.write_text(r"""
+from dataclasses import dataclass
+
+@dataclass
+class DB:
+    HOST: str
+    PORT: int
+
+DATABASE = DB(HOST="127.0.0.1", PORT=3306)
+DEBUG = True
+    """)
+
+    builder = ConfigBuilder().with_py_file(str(config_py))
+    config = builder.build()
+
+    assert config.get("debug") == "True"
+    assert config.get("database.host") == "127.0.0.1"
+    assert config.get("database.port") == "3306"
 
 
 def test_config_builder_with_json_file(tmp_path):
