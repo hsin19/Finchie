@@ -7,7 +7,7 @@ GmailConfig = gmail_extractor.GmailConfig
 _get_header = gmail_extractor._get_header
 _get_credentials = gmail_extractor._get_credentials
 GmailExtractorError = gmail_extractor.GmailExtractorError
-process_gmail_messages = gmail_extractor.process_gmail_messages
+extract_gmail_messages = gmail_extractor.extract_gmail_messages
 
 
 def test_default_values():
@@ -17,17 +17,26 @@ def test_default_values():
     assert config.credentials_file == "config/secret/gmail/credentials.json"
     assert config.token_file == "config/secret/gmail/token.json"
     assert config.output_dir == "data/extract/gmail"
+    assert config.query == ""
+    assert config.days_ago == 30
 
 
 def test_custom_values():
     """Test if GmailConfig can properly set custom values"""
     config = GmailConfig(
-        base64_token="test_token", credentials_file="test_creds.json", token_file="test_token.json", output_dir="test_output"
+        base64_token="test_token",
+        credentials_file="test_creds.json",
+        token_file="test_token.json",
+        output_dir="test_output",
+        query="label:test",
+        days_ago=15,
     )
     assert config.base64_token == "test_token"
     assert config.credentials_file == "test_creds.json"
     assert config.token_file == "test_token.json"
     assert config.output_dir == "test_output"
+    assert config.query == "label:test"
+    assert config.days_ago == 15
 
 
 def test_get_header():
@@ -92,10 +101,10 @@ def test_get_credentials_from_base64_token(mocker):
     assert mock_from_authorized_user_info.called
 
 
-def test_process_gmail_messages_authentication_error(mocker):
+def test_extract_gmail_messages_authentication_error(mocker):
     """Test authentication error handling when processing messages"""
     # Patch the _get_credentials function directly
     mocker.patch.object(gmail_extractor, "_get_credentials", return_value=None)
 
     with pytest.raises(GmailExtractorError, match="Failed to obtain credentials"):
-        process_gmail_messages("label:inbox", GmailConfig())
+        extract_gmail_messages(GmailConfig(query="label:inbox"))

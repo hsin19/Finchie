@@ -1,25 +1,19 @@
 {
-    "extractor": {
-        "source": ["gmail"],
+    "source_extractors": {
+        "output_dir": "data/extract",
         "gmail": {
-            "query": "from:service@mail.chinatrust.com.tw",
-            "credentials_path": "credentials.json",
-            "token_path": "token.json"
+            "query": "label:bill",
+            "days_ago" : 30,
+            "base64_token": null,
+            "credentials_file": "config/secret/gmail/credentials.json",
+            "token_file": "config/secret/gmail/token.json",
+            "output_dir": "data/extract/gmail",
+            "disable": false
         }
     },
-    "output_dir": "emails",
-    "max_results": 10,
-    "loader": {
-        "source": ["api"],
-        "api": {
-            "endpoint": "https://example.com/api/bills",
-            "headers": {
-                "Content-Type": "application/json",
-                "Accept": "application/json"
-            },
-            "auth": ["username", "password"]
+    "document_extractors": {
+        "tsib": {
+            "estatement_password": null
         }
-    },
-    "log_level": "INFO",
-    "dry_run": false
-} 
+    }
+}

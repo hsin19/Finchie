@@ -2,7 +2,7 @@
 
 import os
 
-from finchie_data_pipeline.document_extractors.tsib_extractor import (
+from finchie_data_pipeline.document_extractors.tsib_estatement_extractor import (
     RawCardTransactions,
     _extract_bill_info,
     _extract_transactions,
@@ -135,8 +135,8 @@ def test_extract_credit_card_statement(mocker):
     _mock_pdf(mocker)
 
     # Call the function being tested
-    mock_extract_bill = mocker.patch("finchie_data_pipeline.document_extractors.tsib_extractor._extract_bill_info")
-    mock_extract_transactions = mocker.patch("finchie_data_pipeline.document_extractors.tsib_extractor._extract_transactions")
+    mock_extract_bill = mocker.patch("finchie_data_pipeline.document_extractors.tsib_estatement_extractor._extract_bill_info")
+    mock_extract_transactions = mocker.patch("finchie_data_pipeline.document_extractors.tsib_estatement_extractor._extract_transactions")
 
     mock_bill_info = {"帳單結帳日": "114/02/07"}
     mock_transactions = [RawCardTransactions()]
