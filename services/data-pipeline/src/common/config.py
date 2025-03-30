@@ -118,17 +118,23 @@ class Config:
         env = os.environ.get("ENV", "development")
 
         # Load configuration files and environment variables
-        base_config_path = os.path.join(config_dir, "config.json")
-        builder.with_json_file(base_config_path, optional=True)
+        json_config_path = os.path.join(config_dir, "config.json")
+        builder.with_json_file(json_config_path, optional=True)
 
         py_config_path = os.path.join(config_dir, "config.py")
         builder.with_py_file(py_config_path, optional=True)
 
-        env_config_path = os.path.join(config_dir, f"config.{env}.json")
-        builder.with_json_file(env_config_path, optional=True)
+        env_json_config_path = os.path.join(config_dir, f"config.{env}.json")
+        builder.with_json_file(env_json_config_path, optional=True)
 
         env_py_config_path = os.path.join(config_dir, f"config.{env}.py")
         builder.with_py_file(env_py_config_path, optional=True)
+
+        base_secrect_config_path = os.path.join(config_dir, "secrets", "config.json")
+        builder.with_json_file(base_secrect_config_path, optional=True)
+
+        py_secrect_path = os.path.join(config_dir, "secrets", "config.py")
+        builder.with_py_file(py_secrect_path, optional=True)
 
         builder.with_env()
 

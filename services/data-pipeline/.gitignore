@@ -175,7 +175,7 @@ cython_debug/
 
 # ------- Custom -----------
 data/
-config/secret/
+config/secrets/
 
 
 

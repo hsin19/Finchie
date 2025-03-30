@@ -5,8 +5,8 @@
             "query": "label:bill",
             "days_ago" : 30,
             "base64_token": null,
-            "credentials_file": "config/secret/gmail/credentials.json",
-            "token_file": "config/secret/gmail/token.json",
+            "credentials_file": "config/secrets/gmail/credentials.json",
+            "token_file": "config/secrets/gmail/token.json",
             "output_dir": "data/extract/gmail",
             "disable": false
         }
