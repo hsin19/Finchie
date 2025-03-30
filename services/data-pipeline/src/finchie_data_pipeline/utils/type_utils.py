@@ -1,15 +1,9 @@
+import numbers
 from inspect import signature
 from types import UnionType
 from typing import Any, TypeVar, get_args, get_origin, get_type_hints
 
 T = TypeVar("T")
-
-
-def to_string(value: Any, default: str = "") -> str:
-    """Convert any value to string"""
-    if value is None:
-        return default
-    return str(value)
 
 
 def get_value(obj: Any, key: str, default: T | None = None, required: bool = False) -> Any | T:
@@ -31,75 +25,99 @@ def get_value(obj: Any, key: str, default: T | None = None, required: bool = Fal
     return default
 
 
-def to_bool(value: Any, default: bool = False) -> bool:
-    """Convert any value to boolean
+def to_string(value: Any, default: str = "") -> tuple[str, bool]:
+    """Convert any value to string
 
-    True values: 'true', 'yes', 'y', '1', 1, True
-    False values: 'false', 'no', 'n', '0', 0, False, None
+    Returns:
+        - (converted_value, True) if value can be converted clearly
+        - (default, False) if value is unclear or invalid
     """
     if value is None:
-        return default
+        return default, False
+    return str(value), True
+
+
+def to_bool(value: Any, default: bool = False) -> tuple[bool, bool]:
+    """Convert any value to boolean
+
+    Returns:
+        - (converted_value, True) if value can be converted clearly
+        - (default, False) if value is unclear or invalid
+
+    True values: 'true', 'yes', 'y', '1', 1, True
+
+    False values: 'false', 'no', 'n', '0', 0, False
+    """
+    if value is None:
+        return default, False
 
     if isinstance(value, bool):
-        return value
+        return value, True
 
-    if isinstance(value, int | float):
-        return bool(value)
+    if isinstance(value, numbers.Number):
+        return bool(value), True
 
     if isinstance(value, str):
         value = value.lower().strip()
         if value in ("true", "yes", "y", "1"):
-            return True
+            return True, True
         if value in ("false", "no", "n", "0"):
-            return False
+            return False, True
 
-    return default
+    return default, False
 
 
-def to_int(value: Any, default: int = 0) -> int:
-    """Convert any value to integer"""
+def to_int(value: Any, default: int = 0) -> tuple[int, bool]:
+    """Convert any value to integer
+
+    Returns:
+        - (converted_value, True) if value can be converted clearly
+        - (default, False) if value is unclear or invalid
+    """
     if value is None:
-        return default
+        return default, False
 
     if isinstance(value, int):
-        return value
+        return value, True
 
     if isinstance(value, float):
-        return int(value)
+        return int(value), True
 
     if isinstance(value, str):
         try:
-            return int(value)
+            return int(value), True
         except (ValueError, TypeError):
             pass
 
-    return default
+    return default, False
 
 
-def to_float(value: Any, default: float = 0.0) -> float:
-    """Convert any value to float"""
+def to_float(value: Any, default: float = 0.0) -> tuple[float, bool]:
+    """Convert any value to float
+
+    Returns:
+        - (converted_value, True) if value can be converted clearly
+        - (default, False) if value is unclear or invalid
+    """
     if value is None:
-        return default
+        return default, False
 
     if isinstance(value, int | float):
-        return float(value)
+        return float(value), True
 
     if isinstance(value, str):
         try:
-            return float(value)
+            return float(value), True
         except (ValueError, TypeError):
             pass
 
-    return default
+    return default, False
 
 
-def to_list(value: Any, default: list | None = None) -> list:
+def to_list(value: Any) -> list:
     """Convert any value to list"""
-    if default is None:
-        default = []
-
     if value is None:
-        return default
+        return []
 
     if isinstance(value, list):
         return value
@@ -118,12 +136,18 @@ def to_list(value: Any, default: list | None = None) -> list:
     return [value]
 
 
-def _convert_value(value: Any, target_type: type) -> Any | None:
+def _convert_value(value: Any, target_type: type) -> tuple[Any | None, bool]:
     origin = get_origin(target_type)
     args = get_args(target_type)
 
-    # Handle basic types
-    if target_type is bool:
+    if len(args) == 0 and isinstance(value, target_type):
+        return value, True
+    if target_type is type(None):
+        if value is None:
+            return None, True
+        return value, False
+
+    elif target_type is bool:
         return to_bool(value, default=None)
     elif target_type is int:
         return to_int(value, default=None)
@@ -133,25 +157,41 @@ def _convert_value(value: Any, target_type: type) -> Any | None:
         return to_string(value, default=None)
     elif target_type is list or origin is list:
         # Convert to list first
-        base_list = to_list(value, default=None)
+        base_list = to_list(value)
 
         # If it's a generic list type with arguments, also convert each element
         if origin is list and args and len(args) > 0:
             element_type = args[0]
-            return [_convert_value(item, element_type) for item in base_list]
+            # return [converted[0] for item in base_list if (converted := _convert_value(item, element_type))[1]], True
+            generic_list = []
+            for item in base_list:
+                converted_value, is_success = _convert_value(item, element_type)
+                if not is_success:
+                    return base_list, False
+                generic_list.append(converted_value)
+            return generic_list, True
 
-        return base_list
+        return base_list, True
     elif origin is UnionType:
         for arg in args:
             if arg is type(None):
                 continue
             try:
-                return _convert_value(value, arg)
+                if isinstance(value, arg):
+                    return value, True
             except Exception:
                 continue
-        raise TypeError(f"Cannot convert value '{value}' to any of the union types {args}")
+
+        for arg in args:
+            try:
+                convert_value, is_success = _convert_value(value, arg)
+                if is_success:
+                    return convert_value, True
+            except Exception:
+                continue
+        return None, False
     else:
-        return value
+        return None, False
 
 
 def coerce_to_instance(data: dict | T | None, cls: type[T], allow_none: bool = False) -> T | None:
@@ -190,7 +230,10 @@ def coerce_to_instance(data: dict | T | None, cls: type[T], allow_none: bool = F
             if k in data:
                 raw_value = data[k]
                 expected_type = type_hints.get(k, Any)
-                filtered[k] = _convert_value(raw_value, expected_type)
+                converted_value, is_success = _convert_value(raw_value, expected_type)
+                if not is_success:
+                    raise TypeError(f"Cannot convert {raw_value} to {expected_type}")
+                filtered[k] = converted_value
 
         return cls(**filtered)
     raise TypeError(f"Unsupported type for coercion: {type(data)}")

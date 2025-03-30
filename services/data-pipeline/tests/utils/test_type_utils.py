@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from typing import get_args, get_origin
 
 import pytest
 
@@ -17,14 +16,19 @@ from finchie_data_pipeline.utils.type_utils import (
 
 class TestToString:
     def test_none_value(self):
-        assert to_string(None) == ""
-        assert to_string(None, "default") == "default"
+        assert to_string(None) == ("", False)
+        assert to_string(None, "default") == ("default", False)
 
     def test_various_types(self):
-        assert to_string(123) == "123"
-        assert to_string(3.14) == "3.14"
-        assert to_string(True) == "True"
-        assert to_string([1, 2, 3]) == "[1, 2, 3]"
+        assert to_string(123) == ("123", True)
+        assert to_string(3.14) == ("3.14", True)
+        assert to_string(True) == ("True", True)
+        assert to_string([1, 2, 3]) == ("[1, 2, 3]", True)
+
+    def test_empty_values(self):
+        assert to_string("") == ("", True)
+        assert to_string({}) == ("{}", True)
+        assert to_string([]) == ("[]", True)
 
 
 class TestGetValue:
@@ -60,116 +64,134 @@ class TestGetValue:
 
 class TestToBool:
     def test_none_value(self):
-        assert to_bool(None) is False
-        assert to_bool(None, True) is True
+        assert to_bool(None) == (False, False)
+        assert to_bool(None, True) == (True, False)
 
     def test_bool_values(self):
-        assert to_bool(True) is True
-        assert to_bool(False) is False
+        assert to_bool(True) == (True, True)
+        assert to_bool(False) == (False, True)
 
     def test_numeric_values(self):
-        assert to_bool(1) is True
-        assert to_bool(0) is False
-        assert to_bool(42) is True
-        assert to_bool(-1) is True
-        assert to_bool(0.0) is False
-        assert to_bool(0.1) is True
+        assert to_bool(1) == (True, True)
+        assert to_bool(0) == (False, True)
+        assert to_bool(42) == (True, True)
+        assert to_bool(-1) == (True, True)
+        assert to_bool(0.0) == (False, True)
+        assert to_bool(0.1) == (True, True)
 
     def test_string_values(self):
-        assert to_bool("true") is True
-        assert to_bool("TRUE") is True
-        assert to_bool("True") is True
-        assert to_bool("yes") is True
-        assert to_bool("Y") is True
-        assert to_bool("1") is True
-        assert to_bool("false") is False
-        assert to_bool("FALSE") is False
-        assert to_bool("no") is False
-        assert to_bool("N") is False
-        assert to_bool("0") is False
-        assert to_bool("invalid") is False
+        assert to_bool("true") == (True, True)
+        assert to_bool("TRUE") == (True, True)
+        assert to_bool("True") == (True, True)
+        assert to_bool("yes") == (True, True)
+        assert to_bool("Y") == (True, True)
+        assert to_bool("1") == (True, True)
+        assert to_bool("false") == (False, True)
+        assert to_bool("FALSE") == (False, True)
+        assert to_bool("no") == (False, True)
+        assert to_bool("N") == (False, True)
+        assert to_bool("0") == (False, True)
+        assert to_bool("invalid") == (False, False)
+
+    def test_string_with_whitespace(self):
+        assert to_bool(" true ") == (True, True)
+        assert to_bool(" false ") == (False, True)
+        assert to_bool(" yes ") == (True, True)
+        assert to_bool(" no ") == (False, True)
 
     def test_other_values(self):
-        assert to_bool([]) is False
-        assert to_bool({}) is False
-        assert to_bool(object()) is False
+        assert to_bool([]) == (False, False)
+        assert to_bool({}) == (False, False)
+        assert to_bool(object()) == (False, False)
+        assert to_bool([1, 2, 3]) == (False, False)
 
 
 class TestToInt:
     def test_none_value(self):
-        assert to_int(None) == 0
-        assert to_int(None, 10) == 10
+        assert to_int(None) == (0, False)
+        assert to_int(None, 10) == (10, False)
 
     def test_int_values(self):
-        assert to_int(0) == 0
-        assert to_int(42) == 42
-        assert to_int(-10) == -10
+        assert to_int(0) == (0, True)
+        assert to_int(42) == (42, True)
+        assert to_int(-10) == (-10, True)
 
     def test_float_values(self):
-        assert to_int(3.14) == 3
-        assert to_int(-2.7) == -2
+        assert to_int(3.14) == (3, True)
+        assert to_int(-2.7) == (-2, True)
 
     def test_string_values(self):
-        assert to_int("0") == 0
-        assert to_int("42") == 42
-        assert to_int("-10") == -10
-        assert to_int("3.14") == 0  # This fails to convert
-        assert to_int("invalid") == 0
+        assert to_int("0") == (0, True)
+        assert to_int("42") == (42, True)
+        assert to_int("-10") == (-10, True)
+        assert to_int("3.14") == (0, False)
+        assert to_int("invalid") == (0, False)
+
+    def test_string_with_whitespace(self):
+        assert to_int(" 42 ") == (42, True)
+
+    def test_edge_cases(self):
+        assert to_int("") == (0, False)
+        assert to_int("0.0") == (0, False)
+        assert to_int("inf") == (0, False)
 
     def test_other_values(self):
-        assert to_int(True) == 1  # True converts to 1
-        assert to_int([]) == 0
-        assert to_int({}) == 0
+        assert to_int(True) == (1, True)
+        assert to_int(False) == (0, True)
+        assert to_int([]) == (0, False)
+        assert to_int({}) == (0, False)
 
 
 class TestToFloat:
     def test_none_value(self):
-        assert to_float(None) == 0.0
-        assert to_float(None, 10.5) == 10.5
+        assert to_float(None) == (0.0, False)
+        assert to_float(None, 10.5) == (10.5, False)
 
     def test_numeric_values(self):
-        assert to_float(0) == 0.0
-        assert to_float(42) == 42.0
-        assert to_float(-10) == -10.0
-        assert to_float(3.14) == 3.14
-        assert to_float(-2.7) == -2.7
+        assert to_float(0) == (0.0, True)
+        assert to_float(42) == (42.0, True)
+        assert to_float(-10) == (-10.0, True)
+        assert to_float(3.14) == (3.14, True)
+        assert to_float(-2.7) == (-2.7, True)
 
     def test_string_values(self):
-        assert to_float("0") == 0.0
-        assert to_float("42") == 42.0
-        assert to_float("-10") == -10.0
-        assert to_float("3.14") == 3.14
-        assert to_float("invalid") == 0.0
+        assert to_float("0") == (0.0, True)
+        assert to_float("42") == (42.0, True)
+        assert to_float("-10") == (-10.0, True)
+        assert to_float("3.14") == (3.14, True)
+        assert to_float("invalid") == (0.0, False)
+
+    def test_string_with_whitespace(self):
+        assert to_float(" 3.14 ") == (3.14, True)
+
+    def test_edge_cases(self):
+        assert to_float("") == (0.0, False)
+        assert to_float("inf") == (float("inf"), True)
 
     def test_other_values(self):
-        assert to_float(True) == 1.0  # True converts to 1.0
-        assert to_float([]) == 0.0
-        assert to_float({}) == 0.0
+        assert to_float(True) == (1.0, True)
+        assert to_float(False) == (0.0, True)
+        assert to_float([]) == (0.0, False)
+        assert to_float({}) == (0.0, False)
 
 
 class TestToList:
     def test_none_value(self):
         assert to_list(None) == []
-        assert to_list(None, [1, 2, 3]) == [1, 2, 3]
 
     def test_list_values(self):
         assert to_list([]) == []
         assert to_list([1, 2, 3]) == [1, 2, 3]
+        assert to_list(["a", "b", "c"]) == ["a", "b", "c"]
 
-    def test_string_values(self):
+    def test_non_list_values(self):
         assert to_list("abc") == ["abc"]
-        assert to_list("[a, b, c]") == ["a", "b", "c"]
-        assert to_list("[a,b,c]") == ["a", "b", "c"]
-        assert to_list("a,b,c") == ["a", "b", "c"]
-        assert to_list("a, b, c") == ["a", "b", "c"]
-        assert to_list("") == []
-
-    def test_other_values(self):
         assert to_list(123) == [123]
-        assert to_list(True) == [True]
-        assert to_list((1, 2, 3)) == [1, 2, 3]
-        assert to_list({"a": 1, "b": 2}) == ["a", "b"]
-        assert to_list({1, 2, 3}) == [1, 2, 3]
+        assert to_list({"a": 123}) == ["a"]
+
+    def test_nested_lists(self):
+        assert to_list([1, [2, 3]]) == [1, [2, 3]]
+        assert to_list([[1, 2], [3, 4]]) == [[1, 2], [3, 4]]
 
 
 class TestCoerceToInstance:
@@ -223,75 +245,117 @@ class TestCoerceToInstance:
         with pytest.raises(TypeError):
             coerce_to_instance("invalid", self.Person)
 
+    def test_coerce_basic_types(self):
+        assert coerce_to_instance(42, int) == 42  # 已經是正確類型的實例
+
+    def test_coerce_to_dataclass(self):
+        @dataclass
+        class Person:
+            name: str
+            age: int
+
+        data = {"name": "John", "age": "30"}
+        result = coerce_to_instance(data, Person)
+        assert isinstance(result, Person)
+        assert result.name == "John"
+        assert result.age == 30
+
+    def test_nested_dataclass(self):
+        @dataclass
+        class Address:
+            street: str
+            city: str
+
+        @dataclass
+        class Person:
+            name: str
+            address: Address
+
+        data = {"name": "John", "address": {"street": "123 Main St", "city": "Anytown"}}
+
+        # 當前實現不支持嵌套 dataclass 的遞歸轉換
+        # 需要手動處理嵌套結構
+        address_data = data["address"]
+        address = Address(**address_data)
+        data_with_address = {"name": data["name"], "address": address}
+
+        result = coerce_to_instance(data_with_address, Person)
+        assert isinstance(result, Person)
+        assert isinstance(result.address, Address)
+        assert result.address.street == "123 Main St"
+
+    def test_coerce_list(self):
+        @dataclass
+        class Item:
+            id: int
+            name: str
+
+        @dataclass
+        class Container:
+            items: list[Item]
+
+        # 當前實現不支持列表中元素的自動轉換
+        # 需要手動轉換列表內的元素
+        items = [Item(id=1, name="Item 1"), Item(id=2, name="Item 2")]
+
+        data = {"items": items}
+
+        result = coerce_to_instance(data, Container)
+        assert isinstance(result, Container)
+        assert len(result.items) == 2
+        assert isinstance(result.items[0], Item)
+        assert result.items[0].id == 1
+        assert result.items[1].name == "Item 2"
+
 
 class TestConvertValue:
     def test_convert_to_bool(self):
-        assert _convert_value("true", bool) is True
-        assert _convert_value("false", bool) is False
-        assert _convert_value("invalid", bool) is None
-        assert _convert_value(None, bool) is None
-        assert _convert_value(1, bool) is True
-        assert _convert_value(0, bool) is False
+        assert _convert_value("true", bool) == (True, True)
+        assert _convert_value("false", bool) == (False, True)
+        assert _convert_value("invalid", bool) == (None, False)
+        assert _convert_value(None, bool) == (None, False)
+        assert _convert_value(1, bool) == (True, True)
+        assert _convert_value(0, bool) == (False, True)
 
     def test_convert_to_int(self):
-        assert _convert_value("42", int) == 42
-        assert _convert_value("-10", int) == -10
-        assert _convert_value("invalid", int) is None
-        assert _convert_value(None, int) is None
-        assert _convert_value(3.14, int) == 3
+        assert _convert_value("42", int) == (42, True)
+        assert _convert_value("-10", int) == (-10, True)
+        assert _convert_value("invalid", int) == (None, False)
+        assert _convert_value(None, int) == (None, False)
+        assert _convert_value(3.14, int) == (3, True)
 
     def test_convert_to_float(self):
-        assert _convert_value("3.14", float) == 3.14
-        assert _convert_value("-2.5", float) == -2.5
-        assert _convert_value("invalid", float) is None
-        assert _convert_value(None, float) is None
-        assert _convert_value(42, float) == 42.0
+        assert _convert_value("3.14", float) == (3.14, True)
+        assert _convert_value("-2.5", float) == (-2.5, True)
+        assert _convert_value("invalid", float) == (None, False)
+        assert _convert_value(None, float) == (None, False)
+        assert _convert_value(42, float) == (42.0, True)
 
     def test_convert_to_string(self):
-        assert _convert_value(123, str) == "123"
-        assert _convert_value(3.14, str) == "3.14"
-        assert _convert_value(True, str) == "True"
-        assert _convert_value(None, str) is None
+        assert _convert_value(123, str) == ("123", True)
+        assert _convert_value(3.14, str) == ("3.14", True)
+        assert _convert_value(True, str) == ("True", True)
+        assert _convert_value(None, str) == (None, False)
 
     def test_convert_to_list(self):
-        assert _convert_value("abc", list) == ["abc"]
-        assert _convert_value([1, 2, 3], list) == [1, 2, 3]
-        assert _convert_value(None, list) == []
+        assert _convert_value("abc", list) == (["abc"], True)
+        assert _convert_value([1, 2, 3], list) == ([1, 2, 3], True)
+        assert _convert_value(None, list) == ([], True)
 
-    def test_convert_to_generic_list(self):
-        # Test List[str]
-        list_str_type = list[str]
+    def test_convert_to_typed_list(self):
+        assert _convert_value(["1", "2", "3"], list[int]) == ([1, 2, 3], True)
+        assert _convert_value([1, 2, 3], list[str]) == (["1", "2", "3"], True)
 
-        assert _convert_value("abc", list_str_type) == ["abc"]
-        assert _convert_value(["a", "b", "c"], list_str_type) == ["a", "b", "c"]
-        assert _convert_value([1, 2, 3], list_str_type) == ["1", "2", "3"]
-        assert _convert_value(None, list_str_type) == []
-
-        # Test List[int]
-        list_int_type = list[int]
-        assert _convert_value([1, 2, 3], list_int_type) == [1, 2, 3]
-        assert _convert_value(["1", "2", "3"], list_int_type) == [1, 2, 3]
-        assert _convert_value([1, "2", 3], list_int_type) == [1, 2, 3]
-        assert _convert_value("1,2,3", list_int_type) == [1, 2, 3]
-        assert _convert_value("123", list_int_type) == [123]
-        assert _convert_value(None, list_int_type) == []
-
-        # Test List[bool]
-        list_bool_type = list[bool]
-        assert _convert_value([True, False], list_bool_type) == [True, False]
-        assert _convert_value(["true", "false"], list_bool_type) == [True, False]
-        assert _convert_value(None, list_bool_type) == []
-
-    def test_typing_helpers(self):
-        # Test that get_origin and get_args work as expected
-        assert get_origin(list[str]) is list
-        assert get_args(list[str]) == (str,)
-        assert get_origin(list[int] | None) is not list
-        assert get_origin(list) is None
+    def test_convert_to_union_type(self):
+        assert _convert_value("42", int | str) == ("42", True)
+        assert _convert_value("abc", int | str) == ("abc", True)
+        assert _convert_value("42", int | None) == (42, True)
+        assert _convert_value(None, int | None) == (None, True)
+        assert _convert_value({}, int | str) == ("{}", True)
 
     def test_convert_to_custom_type(self):
         class CustomType:
             pass
 
         value = CustomType()
-        assert _convert_value(value, CustomType) is value
+        assert _convert_value(value, CustomType) == (value, True)

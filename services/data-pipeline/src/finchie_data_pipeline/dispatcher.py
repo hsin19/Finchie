@@ -37,7 +37,7 @@ def _extract_source(config: Any) -> list[str]:
         if not isinstance(source_extractor_config, dict):
             continue
 
-        if to_bool(source_extractor_config.get("disable", False)):
+        if to_bool(source_extractor_config.get("disable", False))[0]:
             logger.warning("Source %s is disabled", source)
             continue
         if not source_extractor_config.get("output_dir"):
