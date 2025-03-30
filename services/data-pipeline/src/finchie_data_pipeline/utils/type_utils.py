@@ -1,5 +1,6 @@
 from inspect import signature
-from typing import Any, TypeVar, get_type_hints
+from types import UnionType
+from typing import Any, TypeVar, get_args, get_origin, get_type_hints
 
 T = TypeVar("T")
 
@@ -103,13 +104,25 @@ def to_list(value: Any, default: list | None = None) -> list:
     if isinstance(value, list):
         return value
 
-    if isinstance(value, str | dict | set | tuple):
+    if isinstance(value, str):
+        value = value.strip()
+        if value.startswith("[") and value.endswith("]"):
+            value = value[1:-1].strip()
+        if value:
+            return [item.strip() for item in value.split(",")]
+        return []
+
+    if isinstance(value, dict | set | tuple):
         return list(value)
 
     return [value]
 
 
 def _convert_value(value: Any, target_type: type) -> Any | None:
+    origin = get_origin(target_type)
+    args = get_args(target_type)
+
+    # Handle basic types
     if target_type is bool:
         return to_bool(value, default=None)
     elif target_type is int:
@@ -118,8 +131,25 @@ def _convert_value(value: Any, target_type: type) -> Any | None:
         return to_float(value, default=None)
     elif target_type is str:
         return to_string(value, default=None)
-    elif target_type is list:
-        return to_list(value, default=None)
+    elif target_type is list or origin is list:
+        # Convert to list first
+        base_list = to_list(value, default=None)
+
+        # If it's a generic list type with arguments, also convert each element
+        if origin is list and args and len(args) > 0:
+            element_type = args[0]
+            return [_convert_value(item, element_type) for item in base_list]
+
+        return base_list
+    elif origin is UnionType:
+        for arg in args:
+            if arg is type(None):
+                continue
+            try:
+                return _convert_value(value, arg)
+            except Exception:
+                continue
+        raise TypeError(f"Cannot convert value '{value}' to any of the union types {args}")
     else:
         return value
 
