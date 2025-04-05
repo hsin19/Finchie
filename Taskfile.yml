@@ -1,0 +1,12 @@
+version: '3'
+
+includes:
+  creditapi:
+    taskfile: services/creditapi/Taskfile.yml
+    dir: services/creditapi
+
+tasks:
+  test-all:
+    desc: Run tests for all projects
+    cmds:
+      - task api:test

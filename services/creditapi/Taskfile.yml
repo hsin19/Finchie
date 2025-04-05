@@ -1,0 +1,33 @@
+version: '3'
+
+tasks:
+  build:
+    desc: Build the Go app
+    cmds:
+      - go build -o app cmd/main.go
+
+  build_linux:
+    desc: Cross build for Linux
+    cmds:
+      - GOOS=linux go build -o app cmd/main.go
+
+  lint:
+    desc: Run golangci-lint
+    cmds:
+      - golangci-lint run --timeout=20m
+
+  test:
+    desc: Run Go tests
+    cmds:
+      - go test -v ./...
+
+  coverage:
+    desc: Run tests with coverage report
+    cmds:
+      - go test ./... -coverprofile=coverage.out
+      - go tool cover -func=coverage.out
+
+  start:
+    desc: Start local Azure function
+    cmds:
+      - func start
