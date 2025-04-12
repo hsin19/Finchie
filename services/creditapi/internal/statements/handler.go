@@ -13,15 +13,6 @@ type StatementManager struct {
 	Repo    StatementRepository
 }
 
-type StatementDTO struct {
-	ID           string
-	Transactions []*TransactionDTO
-}
-
-type TransactionDTO struct {
-	ID string
-}
-
 func (s *StatementManager) StatementsHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
@@ -42,7 +33,6 @@ func (s *StatementManager) getHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	expandTx := shouldExpandTransactions(query)
 	stmt, err := s.Repo.GetStatement(id)
 	if err != nil {
 		slog.Error("Failed to retrieve statement", "id", id, "error", err)
@@ -55,8 +45,7 @@ func (s *StatementManager) getHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	res := convertToStatementDTO(stmt)
-
+	expandTx := shouldExpandTransactions(query)
 	if expandTx {
 		txs, err := s.Repo.GetTransactions(id)
 		if err != nil {
@@ -64,14 +53,11 @@ func (s *StatementManager) getHandler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Failed to retrieve transactions", http.StatusInternalServerError)
 			return
 		}
-		res.Transactions = make([]*TransactionDTO, len(txs))
-		for i, tx := range txs {
-			res.Transactions[i] = convertToTransactionDTO(tx)
-		}
+		stmt.Transactions = &txs
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(res); err != nil {
+	if err := json.NewEncoder(w).Encode(stmt); err != nil {
 		slog.Error("Failed to encode JSON response", "error", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
@@ -79,38 +65,36 @@ func (s *StatementManager) getHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *StatementManager) postHandler(w http.ResponseWriter, r *http.Request) {
-	var stmtDTO StatementDTO
-	err := json.NewDecoder(r.Body).Decode(&stmtDTO)
+	var stmt Statement
+	err := json.NewDecoder(r.Body).Decode(&stmt)
 	if err != nil {
 		slog.Error("Failed to decode statement payload", "error", err)
 		http.Error(w, "Invalid request payload", http.StatusBadRequest)
 		return
 	}
 
-	stmt := convertToStatement(&stmtDTO)
-	err = s.Service.SaveStatement(stmt)
+	err = s.Service.SaveStatement(&stmt)
 	if err != nil {
-		slog.Error("Failed to save statement", "id", stmt.ID, "error", err)
-		http.Error(w, "Failed to save statement", http.StatusInternalServerError)
+		slog.Error("Failed to update statement", "id", stmt.ID, "error", err)
+		http.Error(w, "Failed to update statement", http.StatusInternalServerError)
 		return
 	}
 
 	expandTx := shouldExpandTransactions(r.URL.Query())
 	if expandTx {
-		tx := make([]*Transaction, len(stmtDTO.Transactions))
-		for i, txDTO := range stmtDTO.Transactions {
-			tx[i] = convertToTransaction(txDTO)
+		if stmt.Transactions == nil {
+			http.Error(w, "Transactions null when expanding", http.StatusBadRequest)
+			return
 		}
 
-		err = s.Service.SyncTransactions(stmt.ID, tx)
+		err = s.Service.SyncTransactions(stmt.ID, stmt.Transactions)
 		if err != nil {
-			slog.Error("Failed to sync transactions", "statement_id", stmt.ID, "tx_count", len(tx), "error", err)
+			slog.Error("Failed to sync transactions", "statement_id", stmt.ID, "tx_count", len(*stmt.Transactions), "error", err)
 			http.Error(w, "Failed to sync transactions", http.StatusInternalServerError)
 			return
 		}
 	}
 
-	w.Header().Set("Location", "/statements?id="+stmt.ID)
 	w.WriteHeader(http.StatusCreated)
 }
 
@@ -122,30 +106,4 @@ func shouldExpandTransactions(query url.Values) bool {
 		}
 	}
 	return false
-}
-
-func convertToStatement(statementDTO *StatementDTO) *Statement {
-	return &Statement{
-		ID: statementDTO.ID,
-	}
-}
-
-func convertToStatementDTO(statement *Statement) *StatementDTO {
-	return &StatementDTO{
-		ID: statement.ID,
-		// TODO: Add other fields as needed
-	}
-}
-
-func convertToTransaction(transactionDTO *TransactionDTO) *Transaction {
-	return &Transaction{
-		ID: transactionDTO.ID,
-	}
-}
-
-func convertToTransactionDTO(transaction *Transaction) *TransactionDTO {
-	return &TransactionDTO{
-		ID: transaction.ID,
-		// TODO: Add other fields as needed
-	}
 }

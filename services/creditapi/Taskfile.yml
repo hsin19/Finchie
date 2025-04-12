@@ -16,6 +16,11 @@ tasks:
     cmds:
       - golangci-lint run --timeout=20m
 
+  fmt:
+    desc: Run golangci-lint fmt
+    cmds:
+      - golangci-lint fmt
+
   test:
     desc: Run Go tests
     cmds:
@@ -26,6 +31,13 @@ tasks:
     cmds:
       - go test ./... -coverprofile=coverage.out
       - go tool cover -func=coverage.out
+
+  run:
+    desc: Run the Go app
+    dotenv: ['.env']
+    cmds:
+      - go run cmd/main.go
+    interactive: true
 
   start:
     desc: Start local Azure function

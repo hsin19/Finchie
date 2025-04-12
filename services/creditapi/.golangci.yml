@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=https://golangci-lint.run/jsonschema/golangci.jsonschema.json
 
-version: '2'
+version: "2"
 
 run:
   allow-parallel-runners: true
@@ -14,7 +14,6 @@ linters:
     - bodyclose
     - canonicalheader
     - copyloopvar
-    - customlint
     - durationcheck
     - errcheck
     - errchkjson
@@ -57,11 +56,6 @@ linters:
     # - unparam
     # - unused
 
-  settings:
-    custom:
-      customlint:
-        type: module
-
   exclusions:
     presets:
       - comments
@@ -70,3 +64,14 @@ linters:
 issues:
   max-issues-per-linter: 0
   max-same-issues: 0
+
+formatters:
+  enable:
+    - gofumpt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/hsin19/Finchie/services/creditapi
+    gofumpt:
+      module-path: github.com/hsin19/Finchie/services/creditapi
