@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 import pytest
 
-from finchie_data_pipeline.utils.type_utils import (
+from finchie_statement_fetcher.utils.type_utils import (
     _convert_value,
     coerce_to_instance,
     get_value,

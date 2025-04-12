@@ -3,10 +3,10 @@ name: Data Pipeline
 on:
   push:
     paths:
-      - 'services/data-pipeline/**'
+      - 'services/statement-fetcher/**'
   pull_request:
     paths:
-      - 'services/data-pipeline/**'
+      - 'services/statement-fetcher/**'
 
 permissions:
   contents: read
@@ -16,10 +16,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout only the data-pipeline directory
+      - name: Checkout only the statement-fetcher directory
         uses: actions/checkout@v4
         with:
-          sparse-checkout: services/data-pipeline
+          sparse-checkout: services/statement-fetcher
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5
@@ -29,19 +29,19 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version-file: "services/data-pipeline/.python-version"
+          python-version-file: "services/statement-fetcher/.python-version"
 
       - name: Install dependencies
-        run: uv sync --directory services/data-pipeline --dev
+        run: uv sync --directory services/statement-fetcher --dev
 
       - name: Run tests
-        run: uv run --directory services/data-pipeline pytest --cov --cov-branch --cov-report=xml --junitxml=junit.xml -o junit_family=legacy
+        run: uv run --directory services/statement-fetcher pytest --cov --cov-branch --cov-report=xml --junitxml=junit.xml -o junit_family=legacy
 
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          flags: data-pipeline
+          flags: statement-fetcher
 
       - name: Upload test results to Codecov
         if: ${{ !cancelled() }}

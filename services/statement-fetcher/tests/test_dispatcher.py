@@ -3,14 +3,14 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from finchie_data_pipeline.dispatcher import (
+from finchie_statement_fetcher.dispatcher import (
     _extract_document,
     _extract_documents,
     _extract_source,
     process,
 )
-from finchie_data_pipeline.document_extractors.base import BaseBillDocumentExtractor
-from finchie_data_pipeline.models import CreditCardBill
+from finchie_statement_fetcher.document_extractors.base import BaseBillDocumentExtractor
+from finchie_statement_fetcher.models import CreditCardBill
 
 
 class MockExtractor(BaseBillDocumentExtractor):
@@ -50,7 +50,7 @@ def mock_folders():
     return ["folder1", "folder2"]
 
 
-@patch("finchie_data_pipeline.dispatcher.extract_gmail_messages")
+@patch("finchie_statement_fetcher.dispatcher.extract_gmail_messages")
 def test_extract_source(mock_gmail_extract, mock_config):
     """Test that _extract_source calls the gmail extractor with correct config"""
     mock_gmail_extract.return_value = ["test_folder1", "test_folder2"]
@@ -63,7 +63,7 @@ def test_extract_source(mock_gmail_extract, mock_config):
     assert "test_folder2" in result
 
 
-@patch("finchie_data_pipeline.dispatcher.Path")
+@patch("finchie_statement_fetcher.dispatcher.Path")
 def test_extract_documents_nonexistent_folder(mock_path, mock_config, mock_folders):
     """Test that _extract_documents skips non-existent folders"""
     # Mock Path exists to return False
@@ -77,8 +77,8 @@ def test_extract_documents_nonexistent_folder(mock_path, mock_config, mock_folde
     assert mock_path_instance.exists.call_count == 2
 
 
-@patch("finchie_data_pipeline.dispatcher.Path")
-@patch("finchie_data_pipeline.dispatcher._extract_document")
+@patch("finchie_statement_fetcher.dispatcher.Path")
+@patch("finchie_statement_fetcher.dispatcher._extract_document")
 def test_extract_documents_success(mock_extract_document, mock_path, mock_config, mock_folders):
     """Test that _extract_documents processes existing folders correctly"""
     # Mock Path exists to return True
@@ -98,7 +98,7 @@ def test_extract_documents_success(mock_extract_document, mock_path, mock_config
     assert mock_extract_document.call_count == 2
 
 
-@patch("finchie_data_pipeline.dispatcher.ALL_EXTRACTORS", [MockExtractor])
+@patch("finchie_statement_fetcher.dispatcher.ALL_EXTRACTORS", [MockExtractor])
 def test_extract_document_success():
     """Test that _extract_document finds the right extractor and extracts data"""
     config = {"mock_extractor": {"test_param": "test_value"}}
@@ -116,7 +116,7 @@ def test_extract_document_success():
     delattr(MockExtractor, "_extract_result")
 
 
-@patch("finchie_data_pipeline.dispatcher.ALL_EXTRACTORS", [MockExtractor])
+@patch("finchie_statement_fetcher.dispatcher.ALL_EXTRACTORS", [MockExtractor])
 def test_extract_document_no_handler():
     """Test that _extract_document returns None when no extractor can handle the folder"""
     config = {"mock_extractor": {}}
@@ -133,7 +133,7 @@ def test_extract_document_no_handler():
     delattr(MockExtractor, "_can_handle_result")
 
 
-@patch("finchie_data_pipeline.dispatcher.ALL_EXTRACTORS", [MockExtractor])
+@patch("finchie_statement_fetcher.dispatcher.ALL_EXTRACTORS", [MockExtractor])
 def test_extract_document_extract_failure():
     """Test that _extract_document tries all extractors and returns None when extraction fails"""
     config = {"mock_extractor": {}}
@@ -150,8 +150,8 @@ def test_extract_document_extract_failure():
     delattr(MockExtractor, "_extract_result")
 
 
-@patch("finchie_data_pipeline.dispatcher._extract_source")
-@patch("finchie_data_pipeline.dispatcher._extract_documents")
+@patch("finchie_statement_fetcher.dispatcher._extract_source")
+@patch("finchie_statement_fetcher.dispatcher._extract_documents")
 def test_process(mock_extract_documents, mock_extract_source, mock_config):
     """Test that process calls the extract functions with correct params"""
     mock_extract_source.return_value = ["test_folder1", "test_folder2"]

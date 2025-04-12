@@ -1,9 +1,9 @@
-# Data Pipeline
+# Statement Fetcher
 
 ## Install
 
 - Install [uv](https://docs.astral.sh/uv/getting-started/installation/) for managing Python dependencies
-- Run `uv sync --directory services/data-pipeline --dev` to install dependencies
+- Run `uv sync --directory services/statement-fetcher --dev` to install dependencies
 
 ## Gmail API
 
@@ -17,9 +17,9 @@
     4. Configure OAuth consent screen => Add scope => `.../auth/gmail.readonly`
 
 ### Local Setup and Authentication
-1. Rename the downloaded JSON file to `credentials.json` and place it in `services/data-pipeline/config/secret/gmail/credentials.json`
+1. Rename the downloaded JSON file to `credentials.json` and place it in `services/statement-fetcher/config/secret/gmail/credentials.json`
 2. First-time setup will open a browser window to authorize your application
-3. After authorization, a `token.json` file will be created at `services/data-pipeline/config/secret/gmail/token.json` for subsequent authentication
+3. After authorization, a `token.json` file will be created at `services/statement-fetcher/config/secret/gmail/token.json` for subsequent authentication
 
 ## Deploy
 

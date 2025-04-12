@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/hsin19/Finchie/services/creditapi/internal/statements"
+	"github.com/hsin19/Finchie/services/ledger-svc/internal/statements"
 )
 
 func main() {

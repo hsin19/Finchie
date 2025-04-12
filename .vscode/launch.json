@@ -2,13 +2,13 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "data-pipeline(python): Current Module",
+            "name": "statement-fetcher(python): Current Module",
             "type": "debugpy",
             "request": "launch",
             "justMyCode": true,
             "module": "${fileBasenameNoExtension}",
             "console": "integratedTerminal",
-            "cwd": "${workspaceFolder}/services/data-pipeline",
+            "cwd": "${workspaceFolder}/services/statement-fetcher",
             "env": {
                 "PYTHONPATH": "${fileDirname}"
             }

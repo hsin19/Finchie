@@ -1,7 +1,7 @@
 [project]
-name = "finchie_data_pipeline"
+name = "finchie_statement_fetcher"
 version = "0.1.0"
-description = "Automated ETL pipeline for extracting financial data from multiple sources, processing and loading it into Finchie's API"
+description = "Automated tool for fetching and processing statements from multiple sources, preparing them for Finchie's ledger service"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [

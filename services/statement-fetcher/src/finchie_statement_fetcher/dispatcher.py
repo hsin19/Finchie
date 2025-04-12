@@ -3,11 +3,11 @@ import os
 from pathlib import Path
 from typing import Any
 
-from finchie_data_pipeline.document_extractors.base import BaseBillDocumentExtractor
-from finchie_data_pipeline.document_extractors.tsib_extractor import TsibExtractor
-from finchie_data_pipeline.models import CreditCardBill
-from finchie_data_pipeline.source_extractors.gmail_extractor import extract_gmail_messages
-from finchie_data_pipeline.utils.type_utils import to_bool
+from finchie_statement_fetcher.document_extractors.base import BaseBillDocumentExtractor
+from finchie_statement_fetcher.document_extractors.tsib_extractor import TsibExtractor
+from finchie_statement_fetcher.models import CreditCardBill
+from finchie_statement_fetcher.source_extractors.gmail_extractor import extract_gmail_messages
+from finchie_statement_fetcher.utils.type_utils import to_bool
 
 logger = logging.getLogger(__name__)
 

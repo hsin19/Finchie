@@ -8,7 +8,7 @@ from dataclasses import dataclass
 
 import pdfplumber
 
-from finchie_data_pipeline.utils.logging_utils import setup_console_logger
+from finchie_statement_fetcher.utils.logging_utils import setup_console_logger
 
 
 @dataclass

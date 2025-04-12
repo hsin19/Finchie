@@ -2,10 +2,10 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any
 
-from finchie_data_pipeline.models import CreditCardBill
+from finchie_statement_fetcher.models import Statement
 
 
-class BaseBillDocumentExtractor(ABC):
+class BaseStatementExtractor(ABC):
     @classmethod
     @abstractmethod
     def config_name(cls) -> str:
@@ -25,7 +25,7 @@ class BaseBillDocumentExtractor(ABC):
 
     @classmethod
     @abstractmethod
-    def extract(cls, config: Any, folder_path: Path) -> CreditCardBill | None:
+    def extract(cls, config: Any, folder_path: Path) -> Statement | None:
         """
         Extracts all statement data and converts it to the Common format
         """

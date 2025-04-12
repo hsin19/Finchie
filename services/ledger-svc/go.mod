@@ -1,4 +1,4 @@
-module github.com/hsin19/Finchie/services/creditapi
+module github.com/hsin19/Finchie/services/ledger-svc
 
 go 1.24.1
 

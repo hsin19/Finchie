@@ -6,7 +6,7 @@
     "python.testing.pytestEnabled": true,
     "python-envs.pythonProjects": [
         {
-            "path": "services/data-pipeline",
+            "path": "services/statement-fetcher",
             "envManager": "ms-python.python:venv",
             "packageManager": "ms-python.python:pip"
         }

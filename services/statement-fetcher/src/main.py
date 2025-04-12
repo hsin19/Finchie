@@ -3,14 +3,14 @@ import os
 from datetime import datetime
 
 from common.config import Config
-from finchie_data_pipeline.dispatcher import process
+from finchie_statement_fetcher.dispatcher import process
 
 start_time = datetime.now()
 
 # Setup logging configuration
 log_dir = os.path.join("data", "logs")
 os.makedirs(log_dir, exist_ok=True)
-log_file = os.path.join(log_dir, f"pipeline_{datetime.now().strftime('%Y-%m-%d')}.log")
+log_file = os.path.join(log_dir, f"statement_fetcher_{datetime.now().strftime('%Y-%m-%d')}.log")
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -19,7 +19,7 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
-logger.info("Starting Finchie Data Pipeline")
+logger.info("Starting Finchie Statement Fetcher")
 
 try:
     config = Config.get_default_builder().build().get()
@@ -30,7 +30,7 @@ try:
 
     elapsed_time = datetime.now() - start_time
 
-    logger.info("Finchie Data Pipeline completed successfully in %s seconds", elapsed_time.total_seconds())
+    logger.info("Finchie Statement Fetcher completed successfully in %s seconds", elapsed_time.total_seconds())
 except Exception as e:
-    logger.error("An error occurred during the Finchie Data Pipeline execution: %s", str(e))
+    logger.error("An error occurred during the Finchie Statement Fetcher execution: %s", str(e))
     raise

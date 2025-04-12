@@ -1,9 +1,9 @@
 version: '3'
 
 includes:
-  creditapi:
-    taskfile: services/creditapi/Taskfile.yml
-    dir: services/creditapi
+  ledger-svc:
+    taskfile: services/ledger-svc/Taskfile.yml
+    dir: services/ledger-svc
 
 tasks:
   test-all:

@@ -13,8 +13,8 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
-from finchie_data_pipeline.utils.logging_utils import setup_console_logger
-from finchie_data_pipeline.utils.type_utils import coerce_to_instance
+from finchie_statement_fetcher.utils.logging_utils import setup_console_logger
+from finchie_statement_fetcher.utils.type_utils import coerce_to_instance
 
 SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]  # Read-only permission, only reading emails
 
