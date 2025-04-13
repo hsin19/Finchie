@@ -136,7 +136,7 @@ def to_list(value: Any) -> list:
     return [value]
 
 
-def _convert_value(value: Any, target_type: type) -> tuple[Any | None, bool]:
+def _convert_value(value: Any, target_type: Any) -> tuple[Any | None, bool]:
     origin = get_origin(target_type)
     args = get_args(target_type)
 
@@ -148,13 +148,13 @@ def _convert_value(value: Any, target_type: type) -> tuple[Any | None, bool]:
         return value, False
 
     elif target_type is bool:
-        return to_bool(value, default=None)
+        return to_bool(value)
     elif target_type is int:
-        return to_int(value, default=None)
+        return to_int(value)
     elif target_type is float:
-        return to_float(value, default=None)
+        return to_float(value)
     elif target_type is str:
-        return to_string(value, default=None)
+        return to_string(value)
     elif target_type is list or origin is list:
         # Convert to list first
         base_list = to_list(value)
@@ -194,12 +194,12 @@ def _convert_value(value: Any, target_type: type) -> tuple[Any | None, bool]:
         return None, False
 
 
-def coerce_to_instance(data: dict | T | None, cls: type[T], allow_none: bool = False) -> T | None:
+def coerce_to_instance(data: dict | None | Any, cls: type[T], allow_none: bool = False) -> T | None:
     """
     Coerces the given data into an instance of the specified class.
 
     Args:
-        data (dict | T | None): The input data to be coerced. It can be:
+        data (dict | None | Any): The input data to be coerced. It can be:
             - An instance of the target class `cls`.
             - A dictionary containing parameters to initialize an instance of `cls`.
             - None, if `allow_none` is True.

@@ -3,17 +3,16 @@ import os
 from pathlib import Path
 from typing import Any
 
-from finchie_statement_fetcher.document_extractors.base import BaseBillDocumentExtractor
-from finchie_statement_fetcher.document_extractors.tsib_extractor import TsibExtractor
-from finchie_statement_fetcher.models import CreditCardBill
-from finchie_statement_fetcher.source_extractors.gmail_extractor import extract_gmail_messages
+from finchie_statement_fetcher.fetcher import fetch_gmail_messages
+from finchie_statement_fetcher.models import Statement
+from finchie_statement_fetcher.processor import BaseProcessor, TsibProcessor
 from finchie_statement_fetcher.utils.type_utils import to_bool
 
 logger = logging.getLogger(__name__)
 
 # List of all available document extractors
-ALL_EXTRACTORS: list[type[BaseBillDocumentExtractor]] = [
-    TsibExtractor,
+ALL_EXTRACTORS: list[type[BaseProcessor]] = [
+    TsibProcessor,
 ]
 
 
@@ -21,7 +20,7 @@ def process(config: Any) -> None:
     source_result_dir_list = _extract_source(config)
     normalized_result = _extract_documents(config, source_result_dir_list)
 
-    # TODO: load documents
+    # TODO: load data
     pass
 
 
@@ -45,12 +44,12 @@ def _extract_source(config: Any) -> list[str]:
 
         match source:
             case "gmail":
-                result += extract_gmail_messages(source_extractor_config)
+                result += fetch_gmail_messages(source_extractor_config)
 
     return result
 
 
-def _extract_documents(config: Any, source_result_dir_list: list[str]) -> list[CreditCardBill]:
+def _extract_documents(config: Any, source_result_dir_list: list[str]) -> list[Statement]:
     document_config = config.get("document_extractors", {})
 
     result = []
@@ -67,7 +66,7 @@ def _extract_documents(config: Any, source_result_dir_list: list[str]) -> list[C
     return result
 
 
-def _extract_document(config: Any, folder_path: Path) -> CreditCardBill | None:
+def _extract_document(config: Any, folder_path: Path) -> Statement | None:
     result = None
     for extractor_cls in ALL_EXTRACTORS:
         document_config = config.get(extractor_cls.config_name(), {})

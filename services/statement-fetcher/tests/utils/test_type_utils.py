@@ -236,6 +236,7 @@ class TestCoerceToInstance:
             "tags": "a, bc",  # Should now be converted to ["a", "bc"] and each item to string
         }
         p = coerce_to_instance(data, self.Person)
+        assert isinstance(p, self.Person)
         assert p.name == "123"
         assert p.age == 42
         assert p.active is True
@@ -312,30 +313,30 @@ class TestConvertValue:
     def test_convert_to_bool(self):
         assert _convert_value("true", bool) == (True, True)
         assert _convert_value("false", bool) == (False, True)
-        assert _convert_value("invalid", bool) == (None, False)
-        assert _convert_value(None, bool) == (None, False)
+        assert _convert_value("invalid", bool) == (False, False)
+        assert _convert_value(None, bool) == (False, False)
         assert _convert_value(1, bool) == (True, True)
         assert _convert_value(0, bool) == (False, True)
 
     def test_convert_to_int(self):
         assert _convert_value("42", int) == (42, True)
         assert _convert_value("-10", int) == (-10, True)
-        assert _convert_value("invalid", int) == (None, False)
-        assert _convert_value(None, int) == (None, False)
+        assert _convert_value("invalid", int) == (0, False)
+        assert _convert_value(None, int) == (0, False)
         assert _convert_value(3.14, int) == (3, True)
 
     def test_convert_to_float(self):
         assert _convert_value("3.14", float) == (3.14, True)
         assert _convert_value("-2.5", float) == (-2.5, True)
-        assert _convert_value("invalid", float) == (None, False)
-        assert _convert_value(None, float) == (None, False)
+        assert _convert_value("invalid", float) == (0, False)
+        assert _convert_value(None, float) == (0, False)
         assert _convert_value(42, float) == (42.0, True)
 
     def test_convert_to_string(self):
         assert _convert_value(123, str) == ("123", True)
         assert _convert_value(3.14, str) == ("3.14", True)
         assert _convert_value(True, str) == ("True", True)
-        assert _convert_value(None, str) == (None, False)
+        assert _convert_value(None, str) == ("", False)
 
     def test_convert_to_list(self):
         assert _convert_value("abc", list) == (["abc"], True)

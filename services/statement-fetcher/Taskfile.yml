@@ -1,0 +1,27 @@
+version: '3'
+
+tasks:
+  install_dev:
+    desc: Install dependencies
+    cmds:
+      - uv sync --dev
+
+  lint:
+    desc: Run linters
+    cmds:
+      - uv run ruff check
+
+  fmt:
+    desc: Format code
+    cmds:
+      - uv run ruff format
+
+  test:
+    desc: Run tests
+    cmds:
+      - uv run pytest
+
+  coverage:
+    desc: Run tests with coverage report
+    cmds:
+      - uv run pytest --cov --cov-branch --cov-report=xml --junitxml=junit.xml -o junit_family=legacy

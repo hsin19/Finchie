@@ -4,7 +4,7 @@ import logging
 import os
 import re
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import pdfplumber
 
@@ -47,12 +47,8 @@ class RawCardTransactions:
     """e.g. 葉信賢"""
     card_last_four: str | None = None
     """e.g. 1234"""
-    transactions: list[RawTransaction] | None = None
+    transactions: list[RawTransaction] = field(default_factory=list)
     """List of transactions for this card"""
-
-    def __post_init__(self):
-        if self.transactions is None:
-            self.transactions = []
 
 
 @dataclass
@@ -61,8 +57,8 @@ class RawEStatement:
     Credit card statement summary information
     """
 
-    bill_info: dict[str, str] | None = None
-    transactions: RawCardTransactions | None = None
+    bill_info: dict[str, str]
+    transactions: list[RawCardTransactions]
     """List of transactions for this card"""
 
 
@@ -110,7 +106,7 @@ def _extract_bill_info(text: str) -> dict[str, str]:
     return bill_data
 
 
-def _extract_transactions(text: str):
+def _extract_transactions(text: str) -> list[RawCardTransactions]:
     """Extract transaction details from the statement text"""
 
     header_pattern = r"消費日\s*入帳起息日\s*消費明細\s*新臺幣金額\s*外幣折算日\s*消費地\s*幣別\s*外幣金額"
@@ -242,7 +238,7 @@ def extract_credit_card_statement(pdf_path: str, password: str | None = None) ->
                 text = page.extract_text()
                 if text:
                     full_text += text + "\n"
-    except Exception as e:
+    except Exception:
         logger.error("Failed to read PDF file: %s", pdf_path)
         return None
 

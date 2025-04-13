@@ -5,7 +5,7 @@ from typing import Any
 from finchie_statement_fetcher.models import Statement
 
 
-class BaseStatementExtractor(ABC):
+class BaseProcessor(ABC):
     @classmethod
     @abstractmethod
     def config_name(cls) -> str:

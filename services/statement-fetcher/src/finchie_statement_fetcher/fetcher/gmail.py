@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any
 
+from google.auth.credentials import Credentials as CredentialsBase
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -31,16 +32,14 @@ class GmailConfig:
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["extract_gmail_messages"]
 
-
-class GmailExtractorError(Exception):
-    """Exception raised for errors in the Gmail extraction process."""
+class GmailFetcherError(Exception):
+    """Exception raised for errors in the Gmail fetch process."""
 
     pass
 
 
-def _get_credentials(config: GmailConfig) -> Credentials | None:
+def _get_credentials(config: GmailConfig) -> CredentialsBase | None:
     """
     Get Gmail API credentials.
     First try to read from token in config, if failed then read from file.
@@ -113,17 +112,13 @@ def _save_message_body(part: dict[str, Any], msg_dir: str) -> None:
 
     if "data" not in body:
         return
-    try:
-        data = base64.urlsafe_b64decode(body["data"].encode("UTF-8")).decode("UTF-8")
-    except UnicodeDecodeError:
-        data = base64.urlsafe_b64decode(body["data"].encode("UTF-8"))
-
+    data = base64.urlsafe_b64decode(body["data"].encode("UTF-8"))
     if mime_type == "text/html":
         with open(os.path.join(msg_dir, "body.html"), "w", encoding="utf-8") as f:
-            f.write(data)
+            f.write(data.decode("utf-8"))
     elif mime_type == "text/plain" or mime_type is None:
         with open(os.path.join(msg_dir, "body.txt"), "w", encoding="utf-8") as f:
-            f.write(data)
+            f.write(data.decode("utf-8"))
     else:
         logger.warning("Unknown MIME type %s, saving as raw data.", mime_type)
         with open(os.path.join(msg_dir, "body_raw"), "wb") as f:
@@ -176,7 +171,7 @@ def _get_header(headers: list[dict[str, str]], name: str) -> str:
     return ""
 
 
-def extract_gmail_messages(config: GmailConfig | dict | None = None) -> list[str]:
+def fetch_gmail_messages(config: GmailConfig | dict | None = None) -> list[str]:
     """
     Extract Gmail messages that match the query criteria and save them to local directories.
 
@@ -192,7 +187,7 @@ def extract_gmail_messages(config: GmailConfig | dict | None = None) -> list[str
         IOError: When file read/write operations fail.
         Other exceptions that might occur during processing will be propagated.
     """
-    config = coerce_to_instance(config, GmailConfig)
+    config = coerce_to_instance(config, GmailConfig) or GmailConfig()
 
     base_query = config.query
 
@@ -207,11 +202,11 @@ def extract_gmail_messages(config: GmailConfig | dict | None = None) -> list[str
     logger.debug("Using search query: %s", search_query)
 
     if not search_query:
-        raise GmailExtractorError("No query provided. Please specify a search query in the config.")
+        raise GmailFetcherError("No query provided. Please specify a search query in the config.")
 
     creds = _get_credentials(config)
     if not creds:
-        raise GmailExtractorError("Failed to obtain credentials.")
+        raise GmailFetcherError("Failed to obtain credentials.")
 
     service = build("gmail", "v1", credentials=creds)
     logger.debug("Gmail API service initialized.")
@@ -246,5 +241,5 @@ if __name__ == "__main__":  # pragma: no cover
     base64_token = ""
 
     config = GmailConfig(base64_token=base64_token, query="label:bill", days_ago=25)
-    message_folders = extract_gmail_messages(config=config)
+    message_folders = fetch_gmail_messages(config=config)
     print(f"Successfully extracted data to: {', '.join(message_folders)}")

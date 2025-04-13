@@ -1,13 +1,13 @@
 import pytest
 
-from finchie_statement_fetcher.source_extractors import gmail_extractor
+from finchie_statement_fetcher.fetcher import gmail
 
 # Import required members from the module
-GmailConfig = gmail_extractor.GmailConfig
-_get_header = gmail_extractor._get_header
-_get_credentials = gmail_extractor._get_credentials
-GmailExtractorError = gmail_extractor.GmailExtractorError
-extract_gmail_messages = gmail_extractor.extract_gmail_messages
+GmailConfig = gmail.GmailConfig
+_get_header = gmail._get_header
+_get_credentials = gmail._get_credentials
+GmailExtractorError = gmail.GmailFetcherError
+fetch_gmail_messages = gmail.fetch_gmail_messages
 
 
 def test_default_values():
@@ -72,7 +72,8 @@ def test_get_credentials_from_file(mocker):
     result = _get_credentials(config)
 
     # Verify results
-    assert result.source == "file"
+    assert hasattr(result, "source"), "Expected 'source' attribute"
+    assert getattr(result, "source", None) == "file"
     assert mock_exists.called
     assert mock_from_authorized_user_file.called
 
@@ -97,14 +98,15 @@ def test_get_credentials_from_base64_token(mocker):
     result = _get_credentials(config)
 
     # Verify results
-    assert result.source == "token"
+    assert hasattr(result, "source"), "Expected 'source' attribute"
+    assert getattr(result, "source", None) == "token"
     assert mock_from_authorized_user_info.called
 
 
-def test_extract_gmail_messages_authentication_error(mocker):
+def test_fetch_gmail_messages_authentication_error(mocker):
     """Test authentication error handling when processing messages"""
     # Patch the _get_credentials function directly
-    mocker.patch.object(gmail_extractor, "_get_credentials", return_value=None)
+    mocker.patch.object(gmail, "_get_credentials", return_value=None)
 
     with pytest.raises(GmailExtractorError, match="Failed to obtain credentials"):
-        extract_gmail_messages(GmailConfig(query="label:inbox"))
+        fetch_gmail_messages(GmailConfig(query="label:inbox"))

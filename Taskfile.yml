@@ -5,6 +5,10 @@ includes:
     taskfile: services/ledger-svc/Taskfile.yml
     dir: services/ledger-svc
 
+  statement-fetcher:
+    taskfile: services/statement-fetcher/Taskfile.yml
+    dir: services/statement-fetcher
+
 tasks:
   test-all:
     desc: Run tests for all projects

@@ -4,20 +4,20 @@ import os
 from pathlib import Path
 from typing import Any
 
-from finchie_statement_fetcher.document_extractors.base import BaseStatementExtractor
-from finchie_statement_fetcher.document_extractors.tsib_estatement_extractor import extract_credit_card_statement
 from finchie_statement_fetcher.models import Statement
+from finchie_statement_fetcher.processor.base import BaseProcessor
+from finchie_statement_fetcher.processor.tsib_estatement_extractor import extract_credit_card_statement
 
 logger = logging.getLogger(__name__)
 
 
-class TsibExtractor(BaseStatementExtractor):
+class TsibProcessor(BaseProcessor):
     @classmethod
     def config_name(cls):
         return "tsib"
 
     @classmethod
-    def can_handle(cls, _, folder_path: Path) -> bool:
+    def can_handle(cls, config: Any, folder_path: Path) -> bool:
         return _is_tsib_main_folder(folder_path)
 
     @classmethod
@@ -38,7 +38,7 @@ class TsibExtractor(BaseStatementExtractor):
         raw_statement = extract_credit_card_statement(pdf_path, password=password)
 
         # TODO: convert raw_statement to Statement object
-        return raw_statement
+        return raw_statement  # type: ignore
 
 
 def _is_tsib_main_folder(folder_path):

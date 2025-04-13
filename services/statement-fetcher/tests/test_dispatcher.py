@@ -1,3 +1,4 @@
+import threading
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -9,24 +10,41 @@ from finchie_statement_fetcher.dispatcher import (
     _extract_source,
     process,
 )
-from finchie_statement_fetcher.document_extractors.base import BaseBillDocumentExtractor
-from finchie_statement_fetcher.models import CreditCardBill
+from finchie_statement_fetcher.models import Statement
+from finchie_statement_fetcher.processor import BaseProcessor
 
 
-class MockExtractor(BaseBillDocumentExtractor):
+class MockExtractor(BaseProcessor):
+    _thread_local = threading.local()
+
     @classmethod
-    def config_name(cls):
+    def config_name(cls) -> str:
         return "mock_extractor"
 
     @classmethod
-    def can_handle(cls, config, folder_path):
-        return bool(getattr(cls, "_can_handle_result", True))
+    def can_handle(cls, config, folder_path) -> bool:
+        return getattr(cls._thread_local, "can_handle_result", False)
 
     @classmethod
     def extract(cls, config, folder_path):
-        if getattr(cls, "_extract_result", None) is not None:
-            return cls._extract_result
-        return None
+        return getattr(cls._thread_local, "extract_result", None)
+
+    @classmethod
+    def set_state(cls, can_handle_result=False, extract_result=None):
+        cls._thread_local.can_handle_result = can_handle_result
+        cls._thread_local.extract_result = extract_result
+
+    @classmethod
+    def cleanup(cls) -> None:
+        cls._thread_local.can_handle_result = False
+        cls._thread_local.extract_result = None
+
+
+@pytest.fixture(autouse=True)
+def reset_mock_extractor():
+    MockExtractor.cleanup()
+    yield
+    MockExtractor.cleanup()
 
 
 @pytest.fixture
@@ -50,14 +68,14 @@ def mock_folders():
     return ["folder1", "folder2"]
 
 
-@patch("finchie_statement_fetcher.dispatcher.extract_gmail_messages")
-def test_extract_source(mock_gmail_extract, mock_config):
-    """Test that _extract_source calls the gmail extractor with correct config"""
-    mock_gmail_extract.return_value = ["test_folder1", "test_folder2"]
+@patch("finchie_statement_fetcher.dispatcher.fetch_gmail_messages")
+def test_extract_source(mock_gmail_fetch, mock_config):
+    """Test that _extract_source calls the gmail fetcher with correct config"""
+    mock_gmail_fetch.return_value = ["test_folder1", "test_folder2"]
 
     result = _extract_source(mock_config)
 
-    mock_gmail_extract.assert_called_once()
+    mock_gmail_fetch.assert_called_once()
     assert len(result) == 2
     assert "test_folder1" in result
     assert "test_folder2" in result
@@ -86,8 +104,8 @@ def test_extract_documents_success(mock_extract_document, mock_path, mock_config
     mock_path_instance.exists.return_value = True
     mock_path.return_value = mock_path_instance
 
-    # Mock _extract_document to return a CreditCardBill
-    mock_bill = MagicMock(spec=CreditCardBill)
+    # Mock _extract_document to return a Statement
+    mock_bill = MagicMock(spec=Statement)
     mock_extract_document.return_value = mock_bill
 
     result = _extract_documents(mock_config, mock_folders)
@@ -105,15 +123,11 @@ def test_extract_document_success():
     folder_path = Path("test_folder")
 
     # Set up MockExtractor to return a bill
-    mock_bill = MagicMock(spec=CreditCardBill)
-    MockExtractor._extract_result = mock_bill
-
+    mock_bill = MagicMock(spec=Statement)
+    MockExtractor.set_state(can_handle_result=True, extract_result=mock_bill)
     result = _extract_document(config, folder_path)
 
     assert result == mock_bill
-
-    # Clean up class variable
-    delattr(MockExtractor, "_extract_result")
 
 
 @patch("finchie_statement_fetcher.dispatcher.ALL_EXTRACTORS", [MockExtractor])
@@ -123,14 +137,10 @@ def test_extract_document_no_handler():
     folder_path = Path("test_folder")
 
     # Set up MockExtractor to not handle any folders
-    MockExtractor._can_handle_result = False
-
+    MockExtractor.set_state(can_handle_result=False, extract_result=None)
     result = _extract_document(config, folder_path)
 
     assert result is None
-
-    # Clean up class variable
-    delattr(MockExtractor, "_can_handle_result")
 
 
 @patch("finchie_statement_fetcher.dispatcher.ALL_EXTRACTORS", [MockExtractor])
@@ -140,14 +150,10 @@ def test_extract_document_extract_failure():
     folder_path = Path("test_folder")
 
     # Set up MockExtractor to handle folders but fail to extract
-    MockExtractor._extract_result = None
-
+    MockExtractor.set_state(can_handle_result=True, extract_result=None)
     result = _extract_document(config, folder_path)
 
     assert result is None
-
-    # Clean up class variable
-    delattr(MockExtractor, "_extract_result")
 
 
 @patch("finchie_statement_fetcher.dispatcher._extract_source")
@@ -155,7 +161,7 @@ def test_extract_document_extract_failure():
 def test_process(mock_extract_documents, mock_extract_source, mock_config):
     """Test that process calls the extract functions with correct params"""
     mock_extract_source.return_value = ["test_folder1", "test_folder2"]
-    mock_extract_documents.return_value = [MagicMock(spec=CreditCardBill)]
+    mock_extract_documents.return_value = [MagicMock(spec=Statement)]
 
     process(mock_config)
 
