@@ -25,7 +25,7 @@ class GmailConfig:
     base64_token: str | None = None
     credentials_file: str = "config/secret/gmail/credentials.json"
     token_file: str = "config/secret/gmail/token.json"
-    output_dir: str = "data/extract/gmail"
+    output_dir: str = "data/fetched_result/gmail"
     query: str = ""
     days_ago: int = 30
 
@@ -46,6 +46,7 @@ def _get_credentials(config: GmailConfig) -> CredentialsBase | None:
 
     The token in config is expected to be a base64 encoded JSON string.
     """
+    creds = None
     if config.base64_token:
         try:
             decoded_bytes = base64.b64decode(config.base64_token)
@@ -54,22 +55,25 @@ def _get_credentials(config: GmailConfig) -> CredentialsBase | None:
             if creds.valid:
                 logger.info("Credentials loaded from base64 encoded token")
                 return creds
+            else:
+                logger.warning("Base64 token credentials are invalid or expired.")
         except Exception as e:
             logger.error("Error loading credentials from token: %s", e)
 
-    creds = None
-    if os.path.exists(config.token_file):
+    if not creds and os.path.exists(config.token_file):
         creds = Credentials.from_authorized_user_file(config.token_file, SCOPES)
         logger.info("Credentials loaded from file: %s", config.token_file)
 
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
-            logger.debug("Credentials refreshed")
+            logger.info("Credentials refreshed")
         else:
             flow = InstalledAppFlow.from_client_secrets_file(config.credentials_file, SCOPES)
             creds = flow.run_local_server(port=0)
             logger.debug("Credentials obtained from user authentication")
+
+        os.makedirs(os.path.dirname(config.token_file), exist_ok=True)
         with open(config.token_file, "w") as token_file:
             token_file.write(creds.to_json())
             logger.debug("Credentials saved to file: %s", config.token_file)

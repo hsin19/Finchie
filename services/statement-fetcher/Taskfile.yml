@@ -4,6 +4,7 @@ tasks:
   install_dev:
     desc: Install dependencies
     cmds:
+      - uv venv --allow-existing
       - uv sync --dev
 
   lint:
@@ -25,3 +26,8 @@ tasks:
     desc: Run tests with coverage report
     cmds:
       - uv run pytest --cov --cov-branch --cov-report=xml --junitxml=junit.xml -o junit_family=legacy
+
+  run:
+    desc: Run the statement fetcher
+    cmds:
+      - uv run -m finchie_statement_fetcher 

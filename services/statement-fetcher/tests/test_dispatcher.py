@@ -6,8 +6,8 @@ import pytest
 
 from finchie_statement_fetcher.dispatcher import (
     _extract_document,
-    _extract_documents,
-    _extract_source,
+    _fetch_data,
+    _process_fetched_dirs,
     process,
 )
 from finchie_statement_fetcher.models import Statement
@@ -50,7 +50,7 @@ def reset_mock_extractor():
 @pytest.fixture
 def mock_config():
     return {
-        "source_extractors": {
+        "fetcher": {
             "output_dir": "test_output_dir",
             "gmail": {
                 "query": "test_query",
@@ -59,7 +59,7 @@ def mock_config():
                 "disable": False,
             },
         },
-        "document_extractors": {"mock_extractor": {"test_config": "test_value"}},
+        "document_processor": {"mock_extractor": {"test_config": "test_value"}},
     }
 
 
@@ -73,7 +73,7 @@ def test_extract_source(mock_gmail_fetch, mock_config):
     """Test that _extract_source calls the gmail fetcher with correct config"""
     mock_gmail_fetch.return_value = ["test_folder1", "test_folder2"]
 
-    result = _extract_source(mock_config)
+    result = _fetch_data(mock_config)
 
     mock_gmail_fetch.assert_called_once()
     assert len(result) == 2
@@ -89,7 +89,7 @@ def test_extract_documents_nonexistent_folder(mock_path, mock_config, mock_folde
     mock_path_instance.exists.return_value = False
     mock_path.return_value = mock_path_instance
 
-    result = _extract_documents(mock_config, mock_folders)
+    result = _process_fetched_dirs(mock_config, mock_folders)
 
     assert len(result) == 0
     assert mock_path_instance.exists.call_count == 2
@@ -108,7 +108,7 @@ def test_extract_documents_success(mock_extract_document, mock_path, mock_config
     mock_bill = MagicMock(spec=Statement)
     mock_extract_document.return_value = mock_bill
 
-    result = _extract_documents(mock_config, mock_folders)
+    result = _process_fetched_dirs(mock_config, mock_folders)
 
     assert len(result) == 2
     assert result[0] == mock_bill
@@ -116,7 +116,7 @@ def test_extract_documents_success(mock_extract_document, mock_path, mock_config
     assert mock_extract_document.call_count == 2
 
 
-@patch("finchie_statement_fetcher.dispatcher.ALL_EXTRACTORS", [MockExtractor])
+@patch("finchie_statement_fetcher.dispatcher.ALL_PROCESSORS", [MockExtractor])
 def test_extract_document_success():
     """Test that _extract_document finds the right extractor and extracts data"""
     config = {"mock_extractor": {"test_param": "test_value"}}
@@ -130,7 +130,7 @@ def test_extract_document_success():
     assert result == mock_bill
 
 
-@patch("finchie_statement_fetcher.dispatcher.ALL_EXTRACTORS", [MockExtractor])
+@patch("finchie_statement_fetcher.dispatcher.ALL_PROCESSORS", [MockExtractor])
 def test_extract_document_no_handler():
     """Test that _extract_document returns None when no extractor can handle the folder"""
     config = {"mock_extractor": {}}
@@ -143,7 +143,7 @@ def test_extract_document_no_handler():
     assert result is None
 
 
-@patch("finchie_statement_fetcher.dispatcher.ALL_EXTRACTORS", [MockExtractor])
+@patch("finchie_statement_fetcher.dispatcher.ALL_PROCESSORS", [MockExtractor])
 def test_extract_document_extract_failure():
     """Test that _extract_document tries all extractors and returns None when extraction fails"""
     config = {"mock_extractor": {}}
@@ -156,14 +156,14 @@ def test_extract_document_extract_failure():
     assert result is None
 
 
-@patch("finchie_statement_fetcher.dispatcher._extract_source")
-@patch("finchie_statement_fetcher.dispatcher._extract_documents")
-def test_process(mock_extract_documents, mock_extract_source, mock_config):
+@patch("finchie_statement_fetcher.dispatcher._fetch_data")
+@patch("finchie_statement_fetcher.dispatcher._process_fetched_dirs")
+def test_process(mock_process_fetched_dirs, mock_fetch_data, mock_config):
     """Test that process calls the extract functions with correct params"""
-    mock_extract_source.return_value = ["test_folder1", "test_folder2"]
-    mock_extract_documents.return_value = [MagicMock(spec=Statement)]
+    mock_fetch_data.return_value = ["test_folder1", "test_folder2"]
+    mock_process_fetched_dirs.return_value = [MagicMock(spec=Statement)]
 
     process(mock_config)
 
-    mock_extract_source.assert_called_once_with(mock_config)
-    mock_extract_documents.assert_called_once_with(mock_config, ["test_folder1", "test_folder2"])
+    mock_fetch_data.assert_called_once_with(mock_config)
+    mock_process_fetched_dirs.assert_called_once_with(mock_config, ["test_folder1", "test_folder2"])

@@ -72,12 +72,12 @@ def _extract_bill_info(text: str) -> dict[str, str]:
         # 帳務資訊
         "帳單結帳日": r"帳單結帳日\s*(\d+/\d+/\d+)",
         "繳款截止日": r"繳款截止日\s*(\d+/\d+/\d+)",
-        "上期應繳總額": r"上期應繳總額\s*(\d+(?:,\d+)?)",
-        "已繳退款總額": r"已繳退款總額\s*(\d+(?:,\d+)?)",
-        "前期餘額": r"前期餘額\s*(\d+(?:,\d+)?)",
-        "本期新增款項": r"本期新增款項\s*(\d+(?:,\d+)?)",
-        "本期累計應繳金額": r"本期累計應繳金額\s*(\d+(?:,\d+)?)",
-        "本期最低應繳金額": r"本期最低應繳金額\s*(\d+(?:,\d+)?)",
+        "上期應繳總額": r"上期應繳總額\s*(-?\d+(?:,\d+)?)",
+        "已繳退款總額": r"已繳退款總額\s*(-?\d+(?:,\d+)?)",
+        "前期餘額": r"前期餘額\s*(-?\d+(?:,\d+)?)",
+        "本期新增款項": r"本期新增款項\s*(-?\d+(?:,\d+)?)",
+        "本期累計應繳金額": r"本期累計應繳金額\s*(-?\d+(?:,\d+)?)",
+        "本期最低應繳金額": r"本期最低應繳金額\s*(-?\d+(?:,\d+)?)",
         # 信用額度及利率資訊
         "信用額度": r"信用額度\(NT\)\s*(\d+(?:,\d+)?)",
         "國內預借現金額": r"國內預借現金額度\s*(\d+(?:,\d+)?)",
@@ -85,11 +85,11 @@ def _extract_bill_info(text: str) -> dict[str, str]:
         "分期吉時金額度": r"分期吉時金額度\s*(\d+(?:,\d+)?)",
         "循環信用利率": r"循環信用利率\s*(\d+(?:,\d+)?(?:.\d+)+)%",
         # 點數
-        "上期結餘點數/里數": r"上期結餘點數/里數\s+([ \d,\*]+)",
-        "新增回饋": r"新增回饋\s+([ \d,\*]+)",
-        "活動回饋/調整": r"活動回饋/調整\s+([ \d,\*]+)",
-        "本期使用點數/里數": r"本期使用點數/里數\s+([ \d,\*]+)",
-        "本期結餘回饋": r"本期結餘回饋\s+([ \d,\*]+)",
+        "上期結餘點數/里數": r"上期結餘點數/里數\s+(-?[ \d,\*]+)",
+        "新增回饋": r"新增回饋\s+(-?[ \d,\*]+)",
+        "活動回饋/調整": r"活動回饋/調整\s+(-?[ \d,\*]+)",
+        "本期使用點數/里數": r"本期使用點數/里數\s+(-?[ \d,\*]+)",
+        "本期結餘回饋": r"本期結餘回饋\s+(-?[ \d,\*]+)",
     }
 
     bill_data = {}
@@ -257,8 +257,8 @@ def extract_credit_card_statement(pdf_path: str, password: str | None = None) ->
 if __name__ == "__main__":  # pragma: no cover
     setup_console_logger(logger)
 
-    # Search for TSB_Creditcard_Estatement files in all subdirectories under data\extract\gmail
-    search_pattern = os.path.join("data", "extract", "gmail", "**", "TSB_Creditcard_Estatement*.pdf")
+    # Search for TSB_Creditcard_Estatement files in all subdirectories under data\fetched_result\gmail
+    search_pattern = os.path.join("data", "fetched_result", "gmail", "**", "TSB_Creditcard_Estatement*.pdf")
     matching_files = glob.glob(search_pattern, recursive=True)
 
     if not matching_files:

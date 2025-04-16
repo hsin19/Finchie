@@ -39,7 +39,7 @@ tasks:
       - go run cmd/main.go
     interactive: true
 
-  start:
-    desc: Start local Azure function
+  run-azure-function:
+    desc: Run the Azure function locally
     cmds:
       - func start

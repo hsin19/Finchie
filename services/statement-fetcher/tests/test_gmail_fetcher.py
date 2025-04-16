@@ -16,7 +16,7 @@ def test_default_values():
     assert config.base64_token is None
     assert config.credentials_file == "config/secret/gmail/credentials.json"
     assert config.token_file == "config/secret/gmail/token.json"
-    assert config.output_dir == "data/extract/gmail"
+    assert config.output_dir == "data/fetched_result/gmail"
     assert config.query == ""
     assert config.days_ago == 30
 

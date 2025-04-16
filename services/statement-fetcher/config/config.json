@@ -1,17 +1,17 @@
 {
-    "source_extractors": {
-        "output_dir": "data/extract",
+    "fetcher": {
+        "output_dir": "data/fetched_result",
         "gmail": {
             "query": "label:bill",
             "days_ago" : 30,
             "base64_token": null,
             "credentials_file": "config/secrets/gmail/credentials.json",
             "token_file": "config/secrets/gmail/token.json",
-            "output_dir": "data/extract/gmail",
+            "output_dir": "data/fetched_result/gmail",
             "disable": false
         }
     },
-    "document_extractors": {
+    "document_processor": {
         "tsib": {
             "estatement_password": null
         }
