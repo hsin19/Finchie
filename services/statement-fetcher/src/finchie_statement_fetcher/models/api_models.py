@@ -13,25 +13,16 @@ class SourceType(IntEnum):
 
 
 @dataclass
-class PaymentSource:
-    type: str
-    transaction_id: str
-    statement_id: str
-
-
-@dataclass
 class Transaction:
-    id: str
+    id: str | None
     description: str
     amount: float
     date: datetime
-    statement_id: str | None = None
-    payment_source: PaymentSource | None = None
+    extra: Any | None = None
 
 
 @dataclass
 class Statement:
-    id: str = ""
     type: StatementType = StatementType.CREDIT_CARD_BILL
     source_type: SourceType = SourceType.CREDIT_CARD
     source_name: str = ""

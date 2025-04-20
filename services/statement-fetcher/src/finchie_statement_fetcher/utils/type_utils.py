@@ -107,7 +107,7 @@ def to_float(value: Any, default: float = 0.0) -> tuple[float, bool]:
 
     if isinstance(value, str):
         try:
-            return float(value), True
+            return float(value.replace(",", "")), True
         except (ValueError, TypeError):
             pass
 

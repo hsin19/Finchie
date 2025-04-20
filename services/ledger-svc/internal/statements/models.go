@@ -21,7 +21,7 @@ const (
 )
 
 type Statement struct {
-	ID             string         `bson:"_id" json:"id"`
+	ID             string         `bson:"_id" json:"-"`
 	Type           StatementType  `bson:"type" json:"type"`
 	SourceType     SourceType     `bson:"source_type" json:"source_type"`
 	SourceName     string         `bson:"source_name" json:"source_name"`
@@ -94,7 +94,8 @@ type Transaction struct {
 	Amount        float64        `bson:"amount" json:"amount"`
 	Date          time.Time      `bson:"date" json:"date"`
 	StatementID   string         `bson:"statement_id,omitempty" json:"-"`
-	PaymentSource *PaymentSource `bson:"payment_source,omitempty" json:"payment_source,omitempty"`
+	PaymentSource *PaymentSource `bson:"payment_source,omitempty" json:"-"`
+	Extra         any            `bson:"extra,omitempty" json:"extra,omitempty"`
 }
 
 func (bd *Transaction) Normalize() error {
