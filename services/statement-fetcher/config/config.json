@@ -15,5 +15,11 @@
         "tsib": {
             "estatement_password": null
         }
+    },
+    "storer": {
+        "local_json": {
+            "output_dir": "data/processed_result",
+            "disable": false
+        }
     }
 }
