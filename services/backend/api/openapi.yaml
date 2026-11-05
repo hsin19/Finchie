@@ -1,0 +1,211 @@
+openapi: 3.0.3
+info:
+  title: Finchie API
+  version: 2.0.0
+  description: |
+    Upload statements and read what was parsed from them. Amounts are decimal strings
+    and dates on statements are calendar dates (ADR 0004).
+
+paths:
+  /api/documents:
+    post:
+      operationId: uploadDocument
+      summary: Upload an e-mail (.eml) or PDF statement and queue it for parsing
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "201":
+          description: Stored and queued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Document" }
+        "200":
+          description: The same bytes were uploaded before; nothing changed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Document" }
+        "400":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+    get:
+      operationId: listDocuments
+      summary: Uploaded documents, newest first
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Documents
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Document" }
+
+  /api/documents/{id}:
+    get:
+      operationId: getDocument
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: The document
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Document" }
+        "404":
+          $ref: "#/components/responses/Problem"
+
+  /api/documents/{id}/reparse:
+    post:
+      operationId: reparseDocument
+      summary: Parse the stored original again, e.g. after a parser fix
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "202":
+          description: Queued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Document" }
+        "404":
+          $ref: "#/components/responses/Problem"
+
+  /api/statements:
+    get:
+      operationId: listStatements
+      summary: Parsed statements, newest closing date first
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Statements
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Statement" }
+
+  /api/statements/{id}/transactions:
+    get:
+      operationId: listStatementTransactions
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Transactions in statement order
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Transaction" }
+        "404":
+          $ref: "#/components/responses/Problem"
+
+components:
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema: { type: integer, format: int64 }
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 500, default: 100 }
+
+  responses:
+    Problem:
+      description: Error
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Problem" }
+
+  schemas:
+    Decimal:
+      type: string
+      description: Decimal number as a string, e.g. "-6552.97"
+      example: "1234.50"
+
+    DocumentStatus:
+      type: string
+      enum: [pending, parsed, needs_review, duplicate, failed]
+      description: |
+        pending: queued or being parsed. parsed: reconciled. needs_review: parsed but the
+        transactions don't add up to the statement. duplicate: the same statement came from
+        another document. failed: the parser could not read it (see `error`).
+
+    Document:
+      type: object
+      required: [id, filename, contentType, sizeBytes, sha256, receivedAt, status, warnings]
+      properties:
+        id: { type: integer, format: int64 }
+        filename: { type: string }
+        contentType: { type: string }
+        sizeBytes: { type: integer }
+        sha256: { type: string, description: Hex }
+        receivedAt: { type: string, format: date-time }
+        status: { $ref: "#/components/schemas/DocumentStatus" }
+        error: { type: string }
+        parser: { type: string }
+        parserVersion: { type: string }
+        warnings:
+          type: array
+          items: { type: string }
+        parsedAt: { type: string, format: date-time }
+
+    Statement:
+      type: object
+      required: [id, documentId, institution, closingDate, dueDate, currency, totalDue, reconciliation]
+      properties:
+        id: { type: integer, format: int64 }
+        documentId: { type: integer, format: int64 }
+        institution: { type: string, example: taishin }
+        closingDate: { type: string, format: date }
+        dueDate: { type: string, format: date }
+        currency: { type: string, example: TWD }
+        totalDue: { $ref: "#/components/schemas/Decimal" }
+        reconciliation: { $ref: "#/components/schemas/Reconciliation" }
+
+    Reconciliation:
+      type: object
+      required: [balanced, computed, stated, statedLabel]
+      properties:
+        balanced: { type: boolean }
+        computed: { $ref: "#/components/schemas/Decimal" }
+        stated: { $ref: "#/components/schemas/Decimal" }
+        statedLabel: { type: string }
+
+    TransactionKind:
+      type: string
+      enum: [purchase, foreign_transaction_fee, annual_fee, refund, rebate, payment]
+
+    Transaction:
+      type: object
+      required: [id, transactionDate, description, kind, amount]
+      properties:
+        id: { type: integer, format: int64 }
+        transactionDate: { type: string, format: date }
+        postingDate: { type: string, format: date }
+        description: { type: string }
+        kind: { $ref: "#/components/schemas/TransactionKind" }
+        amount: { $ref: "#/components/schemas/Decimal" }
+        originalAmount: { $ref: "#/components/schemas/Decimal" }
+        originalCurrency: { type: string }
+        country: { type: string }
+        cardLast4: { type: string }
+
+    Problem:
+      type: object
+      required: [message]
+      properties:
+        message: { type: string }

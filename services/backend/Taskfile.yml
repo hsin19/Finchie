@@ -1,0 +1,52 @@
+version: '3'
+
+vars:
+  IMAGE: ghcr.io/hsin19/finchie-backend
+  GOLANGCI_LINT: go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
+
+tasks:
+  generate:
+    desc: Regenerate database code (sqlc) and API code (oapi-codegen); commit the output
+    cmds:
+      - go tool sqlc generate
+      - go tool oapi-codegen -config api/oapi-codegen.yaml api/openapi.yaml
+
+  build:
+    desc: Compile everything
+    cmds:
+      - go build ./...
+
+  lint:
+    desc: golangci-lint (includes gofmt / goimports)
+    cmds:
+      - '{{.GOLANGCI_LINT}} run ./...'
+
+  fmt:
+    desc: Fix formatting
+    cmds:
+      - '{{.GOLANGCI_LINT}} fmt ./...'
+
+  test:
+    desc: Unit and integration tests (integration tests need Docker and skip without it)
+    env:
+      # Colima and similar VMs expose a host-side socket path that does not exist inside the VM.
+      TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE: /var/run/docker.sock
+    cmds:
+      - go test ./... {{.CLI_ARGS}}
+
+  check:
+    desc: Everything CI runs for the backend
+    cmds:
+      - task: lint
+      - task: test
+
+  run:
+    desc: Start the backend on :8080 (reads ../../.local/backend.env)
+    dotenv: ['../../.local/backend.env']
+    cmds:
+      - go run ./cmd/backend
+
+  image:
+    desc: Build the container image
+    cmds:
+      - docker build -t {{.IMAGE}}:dev .

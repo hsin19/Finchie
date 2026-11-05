@@ -1,0 +1,145 @@
+name: Check
+
+# The one definition of "is this tree good": proto contracts, generated code, and lint + tests for each
+# service. pr.yml and release.yml call it, so PRs and releases meet the same bar. main has no deploy
+# workflow, so pushes to main run it here as well. Every check runs through Task, the same commands as
+# locally (`task check`).
+on:
+  push:
+    branches: [main]
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  proto:
+    name: Proto contracts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # buf breaking compares against the local main branch, which a PR checkout does not have.
+      - name: Fetch main for the breaking-change check
+        if: ${{ github.ref != 'refs/heads/main' }}
+        run: git fetch --no-tags --depth=1 origin +refs/heads/main:refs/heads/main
+
+      # buf runs through `go run`.
+      - name: Setup Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: services/backend/go.mod
+          cache-dependency-path: services/backend/go.sum
+
+      - name: Setup Task
+        uses: go-task/setup-task@v2
+
+      - name: Format, lint, and breaking changes
+        run: task proto:check
+
+  generated:
+    name: Generated code is committed
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: services/backend/go.mod
+          cache-dependency-path: services/backend/go.sum
+
+      - name: Setup Task
+        uses: go-task/setup-task@v2
+
+      - name: Regenerate
+        run: task proto backend:generate
+
+      - name: Compare with the commit
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            git status --short
+            git diff
+            echo "::error::Generated code is stale: run 'task proto backend:generate' and commit the result"
+            exit 1
+          fi
+
+  parser:
+    name: Parser
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v10
+        with:
+          enable-cache: true
+          cache-dependency-glob: services/parser/uv.lock
+
+      - name: Setup Task
+        uses: go-task/setup-task@v2
+
+      - name: Install
+        id: install
+        run: task parser:install
+
+      # One step per check, gated on `!cancelled()`, so a single run reports every failure.
+      - name: Lint
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: task parser:lint
+
+      - name: Tests
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: task parser:test
+
+  backend:
+    name: Backend
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: services/backend/go.mod
+          cache-dependency-path: services/backend/go.sum
+
+      - name: Setup Task
+        uses: go-task/setup-task@v2
+
+      - name: Build
+        id: build
+        run: task backend:build
+
+      - name: Lint
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: task backend:lint
+
+      # Integration tests start Postgres with testcontainers; the runner has Docker.
+      - name: Tests
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: task backend:test
+
+  scripts:
+    name: Shell scripts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Task
+        uses: go-task/setup-task@v2
+
+      # shellcheck ships with the ubuntu runner image.
+      - name: ShellCheck
+        run: task shellcheck

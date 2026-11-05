@@ -1,0 +1,50 @@
+version: '3'
+
+vars:
+  IMAGE: ghcr.io/hsin19/finchie-parser
+
+tasks:
+  install:
+    desc: Install dependencies into .venv
+    cmds:
+      - uv sync
+
+  lint:
+    desc: Lint and check formatting
+    cmds:
+      - uv run ruff check .
+      - uv run ruff format --check .
+
+  fmt:
+    desc: Fix lint and format
+    cmds:
+      - uv run ruff check --fix .
+      - uv run ruff format .
+
+  test:
+    desc: Unit tests (synthetic fixtures only)
+    cmds:
+      - uv run pytest {{.CLI_ARGS}}
+
+  test-real:
+    desc: Parse every statement in .local/statements and assert it reconciles (ADR 0006)
+    env:
+      FINCHIE_REAL_STATEMENTS_DIR: '{{.FINCHIE_REAL_STATEMENTS_DIR | default "../../.local/statements"}}'
+    cmds:
+      - uv run pytest tests/test_real_statements.py -s {{.CLI_ARGS}}
+
+  check:
+    desc: Everything CI runs for the parser
+    cmds:
+      - task: lint
+      - task: test
+
+  run:
+    desc: Start the gRPC server on :50051 (reads ../../.local/parser.env)
+    cmds:
+      - uv run python -m finchie_parser
+
+  image:
+    desc: Build the container image
+    cmds:
+      - docker build -t {{.IMAGE}}:dev .

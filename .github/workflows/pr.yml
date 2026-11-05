@@ -1,0 +1,46 @@
+name: Pull Request
+
+# Everything a PR gets: the shared gate in check.yml, plus what only makes sense on a PR, dependency
+# review and the Dependabot auto-merge. Named for its trigger rather than `ci.yml`, because CI is not
+# what distinguishes it: release.yml calls the same gate.
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    uses: ./.github/workflows/check.yml
+
+  # Needs the dependency graph turned on (see README.md); until then every PR fails here.
+  dependency-review:
+    name: Dependency Review
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Dependency Review
+        uses: actions/dependency-review-action@v5
+        with:
+          fail-on-severity: moderate
+          comment-summary-in-pr: on-failure
+
+  # Merges a green Dependabot PR through the shared workflow in hsin19/actions; `needs` is what "green"
+  # means here. AUTOMERGE_TOKEN is a Dependabot secret, not GITHUB_TOKEN, so the merge's push to main
+  # still runs check.yml. See README.md for the token.
+  auto-merge:
+    needs: [check, dependency-review]
+    uses: hsin19/actions/.github/workflows/dependabot-automerge.yml@v1
+    secrets:
+      token: ${{ secrets.AUTOMERGE_TOKEN }}

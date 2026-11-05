@@ -1,0 +1,48 @@
+# Local development only. Production runs from the homelab repository's Compose file.
+#   docker compose up -d                       Postgres for `task backend:run`
+#   docker compose --profile app up --build    Postgres + parser + backend, as in production
+name: finchie
+
+services:
+  postgres:
+    image: postgres:18.6
+    environment:
+      POSTGRES_USER: finchie
+      POSTGRES_PASSWORD: finchie
+      POSTGRES_DB: finchie
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      # Postgres 18 images keep data under /var/lib/postgresql/<major>/docker.
+      - postgres:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "finchie"]
+      interval: 2s
+      retries: 30
+
+  parser:
+    profiles: [app]
+    build: services/parser
+    init: true
+    env_file:
+      - path: .local/parser.env
+        required: false
+
+  backend:
+    profiles: [app]
+    build: services/backend
+    init: true
+    environment:
+      BACKEND_DATABASE_URL: postgres://finchie:finchie@postgres:5432/finchie?sslmode=disable
+      BACKEND_PARSER_ADDR: parser:50051
+      BACKEND_LOG_FORMAT: text
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      parser:
+        condition: service_healthy
+
+volumes:
+  postgres:

@@ -5,19 +5,104 @@ updates:
       - "/services/*"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    groups:
+      # The generated gRPC code checks these at import time; move them together.
+      grpc:
+        patterns:
+          - "grpcio*"
+          - "protobuf"
+          - "googleapis-common-protos"
+      ocr:
+        patterns:
+          - "rapidocr"
+          - "onnxruntime"
+      non-major:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
 
   - package-ecosystem: "gomod"
     directories:
       - "/services/*"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    groups:
+      # Generators stamp their version into the files they write, so check.yml's "generated code is
+      # committed" job fails until someone runs `task backend:generate`. "-manual" groups are left
+      # for a human by the shared auto-merge workflow.
+      codegen-manual:
+        patterns:
+          - "github.com/sqlc-dev/sqlc"
+          - "github.com/oapi-codegen/oapi-codegen/v2"
+      grpc:
+        patterns:
+          - "google.golang.org/*"
+      river:
+        patterns:
+          - "github.com/riverqueue/*"
+      testcontainers:
+        patterns:
+          - "github.com/testcontainers/*"
+      non-major:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
 
+  # check.yml does not build images, so a green PR says nothing about a new base image; release.yml
+  # is the first to build and smoke-check it. Left for a human.
   - package-ecosystem: "docker"
+    directories:
+      - "/services/*"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    groups:
+      images-manual:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "docker-compose"
     directory: "/"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    groups:
+      compose-manual:
+        patterns:
+          - "*"
 
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    groups:
+      actions:
+        patterns:
+          - "*"
