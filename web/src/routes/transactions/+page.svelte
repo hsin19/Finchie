@@ -1,0 +1,351 @@
+<script lang="ts">
+import {
+    type Transaction,
+    type TransactionKind,
+    TRANSACTIONS_PAGE_SIZE as PAGE_SIZE,
+} from "#lib/api/client.js";
+import Dialog from "#lib/components/Dialog.svelte";
+import FileLink from "#lib/components/FileLink.svelte";
+import MonthSelect from "#lib/components/MonthSelect.svelte";
+import Tag from "#lib/components/Tag.svelte";
+import {
+    monthOf,
+    shortDate,
+    weekday,
+} from "#lib/dates.js";
+import { matchingFee } from "#lib/fees.js";
+import { onKeys } from "#lib/keys.svelte.js";
+import {
+    cardLabel,
+    institution,
+    kindOrder,
+    kinds,
+    tone,
+} from "#lib/labels.js";
+import {
+    approx,
+    formatAmount,
+    sum,
+} from "#lib/money.js";
+import { goto } from "$app/navigation";
+import { resolve } from "$app/paths";
+import { page } from "$app/state";
+import type { PageProps } from "./$types";
+
+let { data }: PageProps = $props();
+
+const items = $derived(data.result.items);
+const statements = $derived(new Map(data.statements.map(s => [s.id, s])));
+const documents = $derived(new Map(data.documents.map(d => [d.id, d])));
+
+// ---- URL-backed filters
+
+function navigate(changes: Record<string, string | string[] | null>, { replace = false, keepPage = false } = {}) {
+    const dropped = [...Object.keys(changes), ...(keepPage ? [] : ["page"])];
+    const kept = [...page.url.searchParams].filter(([key]) => !dropped.includes(key));
+    const added = Object.entries(changes).flatMap(([key, value]) => (value === null ? [] : [value].flat()).filter(v => v !== "").map(v => [key, v]));
+    const query = new URLSearchParams([...kept, ...added]).toString();
+    return goto(query ? resolve(`/transactions?${query}`) : resolve("/transactions"), { reset: false, replace });
+}
+
+// Search applies while typing, a moment after the last key.
+let search = $state(page.url.searchParams.get("q") ?? "");
+let searchTimer: ReturnType<typeof setTimeout> | undefined;
+function onSearchInput() {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => void navigate({ q: search.trim() || null }, { replace: true }), 250);
+}
+function onSearchKeydown(event: KeyboardEvent) {
+    if (event.key === "Escape") {
+        search = "";
+        clearTimeout(searchTimer);
+        void navigate({ q: null }, { replace: true });
+    } else if (event.key === "Enter" || event.key === "ArrowDown") {
+        event.preventDefault();
+        (event.currentTarget as HTMLInputElement).blur();
+        selectedId = items[0]?.id;
+    }
+}
+
+// No kind filter means every kind. Toggling one off from "all" keeps the rest.
+const activeKinds = $derived(new Set<TransactionKind>(data.filters.kinds.length > 0 ? data.filters.kinds : kindOrder));
+function toggleKind(kind: TransactionKind) {
+    const next = kindOrder.filter(k => (k === kind ? !activeKinds.has(k) : activeKinds.has(k)));
+    const all = next.length === 0 || next.length === kindOrder.length;
+    void navigate({ kind: all ? null : next });
+}
+const kindCounts = $derived(new Map(data.result.byKind.map(k => [k.kind, k])));
+
+// Card picker: each bank, then each of its cards. Counts come from the byCard facet, which
+// ignores the card filter, so every option shows what picking it would give.
+const cardOptions = $derived.by(() => {
+    const options: { value: string; label: string; }[] = [];
+    const banks = [...new Set(data.result.byCard.map(c => c.institution))];
+    for (const bank of banks) {
+        const cards = data.result.byCard.filter(c => c.institution === bank);
+        options.push({ value: bank, label: `${institution(bank).code} (all) · ${cards.reduce((n, c) => n + c.count, 0)}` });
+        for (const c of cards) if (c.cardLast4) options.push({ value: `${bank}:${c.cardLast4}`, label: `${cardLabel(bank, c.cardLast4)} · ${c.count}` });
+    }
+    return options;
+});
+const cardValue = $derived(data.filters.institution ? `${data.filters.institution}${data.filters.card ? `:${data.filters.card}` : ""}` : "");
+
+// ---- Selection and detail
+
+let selectedId = $state<number>();
+let sheet = $state(false);
+const cursor = $derived(items.findIndex(t => t.id === selectedId));
+const selected = $derived(cursor >= 0 ? items[cursor] : undefined);
+
+function select(t: Transaction | undefined, { open = false } = {}) {
+    selectedId = t?.id;
+    if (t && open && !matchMedia("(min-width: 1024px)").matches) sheet = true;
+    if (t) document.getElementById(`tx-${t.id}`)?.scrollIntoView({ block: "nearest" });
+}
+
+// A foreign purchase and the fee charged for it.
+const related = $derived(selected ? matchingFee(selected, items) : undefined);
+
+// ---- Paging
+
+const first = $derived(data.result.total === 0 ? 0 : (data.pageNumber - 1) * PAGE_SIZE + 1);
+const last = $derived((data.pageNumber - 1) * PAGE_SIZE + items.length);
+const pages = $derived(Math.max(1, Math.ceil(data.result.total / PAGE_SIZE)));
+function goPage(n: number) {
+    if (n < 1 || n > pages || n === data.pageNumber) return;
+    selectedId = undefined;
+    void navigate({ page: n === 1 ? null : String(n) }, { keepPage: true });
+}
+
+// Mobile lists the page grouped by day.
+const days = $derived.by(() => {
+    const groups: { date: string; items: Transaction[]; }[] = [];
+    for (const t of items) {
+        if (groups.at(-1)?.date !== t.transactionDate) groups.push({ date: t.transactionDate, items: [] });
+        groups.at(-1)!.items.push(t);
+    }
+    return groups;
+});
+
+function amountTone(t: Transaction) {
+    return t.kind === "purchase" ? "text-ink" : tone[kinds[t.kind].tone];
+}
+
+function original(t: Transaction) {
+    return t.originalAmount && t.originalCurrency ? `${t.originalCurrency} ${formatAmount(t.originalAmount)}` : "";
+}
+
+function rate(t: Transaction) {
+    if (!t.originalAmount || !t.originalCurrency || approx(t.originalAmount) === 0) return undefined;
+    return `${(approx(t.amount) / approx(t.originalAmount)).toFixed(2)} TWD / ${t.originalCurrency}`;
+}
+
+onKeys({
+    "j": () => select(items[Math.min(cursor + 1, items.length - 1)]),
+    "k": () => select(items[Math.max(cursor - 1, 0)]),
+    "Enter": () => select(selected ?? items[0], { open: true }),
+    "x": () => {
+        selectedId = undefined;
+        sheet = false;
+    },
+    "Escape": () => (selectedId = undefined),
+    "n": () => goPage(data.pageNumber + 1),
+    "p": () => goPage(data.pageNumber - 1),
+    "/": () => document.getElementById("q")?.focus(),
+});
+</script>
+
+{#snippet detail(t: Transaction)}
+    {@const statement = statements.get(t.statementId)}
+    {@const doc = statement ? documents.get(statement.documentId) : undefined}
+    <div class="flex flex-col gap-3">
+        <div class="text-[16px] font-bold break-words">{t.description}</div>
+        <div class="text-[24px] font-bold {amountTone(t)}">{formatAmount(t.amount)} <span class="text-[13px] font-normal text-mute">{statement?.currency ?? "TWD"}</span></div>
+        <dl class="m-0 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5">
+            <dt class="text-mute">date</dt>
+            <dd class="m-0">{t.transactionDate}{t.postingDate && t.postingDate !== t.transactionDate ? `（入帳 ${shortDate(t.postingDate)}）` : ""}</dd>
+            <dt class="text-mute">kind</dt>
+            <dd class="m-0 {tone[kinds[t.kind].tone]}">{kinds[t.kind].short} <span class="text-mute">{kinds[t.kind].label}</span></dd>
+            {#if original(t)}
+                <dt class="text-mute">original</dt>
+                <dd class="m-0">{original(t)}</dd>
+                <dt class="text-mute">rate</dt>
+                <dd class="m-0 text-dim">{rate(t)}</dd>
+            {/if}
+            {#if t.country}
+                <dt class="text-mute">country</dt>
+                <dd class="m-0">{t.country}</dd>
+            {/if}
+            <dt class="text-mute">card</dt>
+            <dd class="m-0">{institution(t.institution).name} {cardLabel(t.institution, t.cardLast4)}</dd>
+            {#if statement}
+                <dt class="text-mute">statement</dt>
+                <dd class="m-0">
+                    <a href={resolve("/statements/[id]", { id: String(statement.id) })}>{t.institution} {monthOf(statement.closingDate)}</a>
+                    <Tag status={statement.reconciliation.balanced ? "parsed" : "needs_review"} />
+                </dd>
+            {/if}
+            {#if doc}
+                <dt class="text-mute">parser</dt>
+                <dd class="m-0 text-dim">{doc.parser} v{doc.parserVersion}</dd>
+            {/if}
+        </dl>
+        {#if related}
+            {@const [fee, purchase] = related.kind === "foreign_transaction_fee" ? [related, t] : [t, related]}
+            <div class="flex flex-col gap-1 border-t border-dashed border-line pt-2.5">
+                <div class="label">RELATED</div>
+                <button type="button" class="flex gap-2 text-left text-ink" onclick={() => select(related)}>
+                    <span class={tone[kinds[related.kind].tone]}>{kinds[related.kind].short}</span>
+                    <span class="grow truncate">{related.description}</span>
+                    <span class={amountTone(related)}>{formatAmount(related.amount)}</span>
+                    {#if approx(purchase.amount) !== 0}
+                        <span class="text-mute">({((approx(fee.amount) / approx(purchase.amount)) * 100).toFixed(1)}%)</span>
+                    {/if}
+                </button>
+            </div>
+        {/if}
+        {#if doc}
+            <FileLink id={doc.id}>原始檔 #{doc.id} {doc.filename} →</FileLink>
+        {/if}
+    </div>
+{/snippet}
+
+<section class="panel flex flex-col gap-2.5 p-3 md:p-3.5">
+    <div class="flex items-center gap-2 rounded-[4px] border border-line-strong bg-ground px-2.5">
+        <label for="q" class="text-accent whitespace-nowrap">[/] 搜尋</label>
+        <input
+            id="q"
+            type="search"
+            autocomplete="off"
+            placeholder="商店名稱，例如 uber"
+            class="min-h-10 min-w-0 grow border-none bg-transparent text-ink outline-none"
+            bind:value={search}
+            oninput={onSearchInput}
+            onkeydown={onSearchKeydown}
+        />
+        <span class="hidden text-[12px] text-mute sm:inline">[esc] 清除</span>
+    </div>
+    <div class="flex flex-wrap items-center gap-2">
+        <MonthSelect all months={data.months} value={data.period} onchange={m => void navigate({ m })} />
+        <select class="control" aria-label="卡片" value={cardValue} onchange={event => void navigate({ card: event.currentTarget.value || null })}>
+            <option value="">all cards</option>
+            {#each cardOptions as option (option.value)}
+                <option value={option.value}>{option.label}</option>
+            {/each}
+            {#if cardValue && !cardOptions.some(o => o.value === cardValue)}<option value={cardValue}>{cardValue}</option>{/if}
+        </select>
+        <div role="group" aria-label="交易種類" class="flex gap-1.5 overflow-x-auto whitespace-nowrap">
+            {#each kindOrder as kind (kind)}
+                {@const on = activeKinds.has(kind)}
+                <button type="button" aria-pressed={on} class="control shrink-0 {on ? 'pressed' : 'text-mute'}" onclick={() => toggleKind(kind)}>
+                    {on ? "[x]" : "[ ]"} {kinds[kind].short} <span class="text-mute">{kindCounts.get(kind)?.count ?? 0}</span>
+                </button>
+            {/each}
+        </div>
+        <label class="flex min-h-9 items-center gap-1.5 text-dim">
+            <input type="checkbox" class="accent-accent" checked={data.filters.overseas} onchange={event => void navigate({ overseas: event.currentTarget.checked ? "1" : null })} />
+            只看海外
+        </label>
+    </div>
+</section>
+
+<div class="flex flex-wrap gap-x-5 gap-y-1 border-b border-dashed border-line px-0.5 pb-2 text-dim">
+    <span>rows <span class="text-ink">{data.result.total}</span></span>
+    <span>sum <span class="text-ink">{formatAmount(data.result.sum)}</span></span>
+    {#each kindOrder.filter(k => k !== "purchase" && activeKinds.has(k) && kindCounts.has(k)) as kind (kind)}
+        <span>{kinds[kind].short} <span class={tone[kinds[kind].tone]}>{formatAmount(kindCounts.get(kind)!.amount)}</span></span>
+    {/each}
+    <span class="ml-auto text-mute">sort date ▼</span>
+</div>
+
+<div class="grid gap-3 {selected ? 'lg:grid-cols-[1fr_340px]' : ''}">
+    <section class="panel min-w-0 px-3.5 pt-1 pb-2.5">
+        <!-- Desktop: a table. -->
+        <div class="hidden overflow-x-auto md:block">
+            <table class="w-full border-collapse">
+                <thead>
+                    <tr class="text-left text-mute">
+                        <th class="w-4 py-2 pr-1 font-medium"><span class="sr-only">選取</span></th>
+                        <th class="px-2 py-2 font-medium">DATE</th>
+                        <th class="px-2 py-2 font-medium">MERCHANT</th>
+                        <th class="px-2 py-2 font-medium">KIND</th>
+                        <th class="px-2 py-2 font-medium">CARD</th>
+                        <th class="px-2 py-2 font-medium">CTRY</th>
+                        <th class="px-2 py-2 text-right font-medium">ORIG</th>
+                        <th class="py-2 pl-2 text-right font-medium">TWD</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {#each items as t (t.id)}
+                        <tr
+                            id="tx-{t.id}"
+                            class="cursor-pointer border-t border-rule {t.id === selectedId ? 'bg-raised' : 'hover:bg-raised/60'}"
+                            onclick={() => select(t, { open: true })}
+                        >
+                            <td class="py-2 pr-1 text-accent">{t.id === selectedId ? "▶" : ""}</td>
+                            <td class="px-2 py-2 whitespace-nowrap">{shortDate(t.transactionDate)}</td>
+                            <td class="max-w-[320px] truncate px-2 py-2">{t.description}</td>
+                            <td class="px-2 py-2 {tone[kinds[t.kind].tone]}">{kinds[t.kind].short}</td>
+                            <td class="px-2 py-2 whitespace-nowrap text-dim">{cardLabel(t.institution, t.cardLast4)}</td>
+                            <td class="px-2 py-2 text-dim">{t.country ?? "—"}</td>
+                            <td class="px-2 py-2 text-right whitespace-nowrap text-dim">{original(t)}</td>
+                            <td class="py-2 pl-2 text-right whitespace-nowrap {amountTone(t)}">{formatAmount(t.amount)}</td>
+                        </tr>
+                    {:else}
+                        <tr class="border-t border-rule"><td colspan="8" class="py-3 text-mute">沒有符合的交易。</td></tr>
+                    {/each}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Mobile: grouped by day. -->
+        <div class="md:hidden">
+            {#each days as day (day.date)}
+                <div class="flex justify-between pt-3 pb-1.5 text-[12px] tracking-[0.06em] text-mute">
+                    <span>{shortDate(day.date)} {weekday(day.date)}</span>
+                    <span>{formatAmount(sum(day.items.map(t => t.amount)))}</span>
+                </div>
+                {#each day.items as t (t.id)}
+                    <button type="button" class="flex min-h-11 w-full flex-col gap-0.5 border-t border-rule py-2.5 text-left text-ink" onclick={() => select(t, { open: true })}>
+                        <span class="flex w-full justify-between gap-2.5">
+                            <span class="truncate">{t.description}</span>
+                            <span class="shrink-0 {amountTone(t)}">{formatAmount(t.amount)}</span>
+                        </span>
+                        <span class="text-[12px] text-mute">{cardLabel(t.institution, t.cardLast4)} · {kinds[t.kind].short}{original(t) ? ` · ${original(t)}` : ""}</span>
+                    </button>
+                {/each}
+            {:else}
+                <p class="m-0 py-3 text-mute">沒有符合的交易。</p>
+            {/each}
+        </div>
+
+        <div class="flex flex-wrap items-center justify-between gap-2 border-t border-line pt-2.5 text-[12px] text-mute">
+            <span>{first}–{last} / {data.result.total}</span>
+            <span class="flex items-center gap-2">
+                <span class="hidden lg:inline"><span class="text-accent">[j/k]</span> 上下移動 · <span class="text-accent">[enter]</span> 詳細 ·</span>
+                <button type="button" class="control min-h-8" disabled={data.pageNumber <= 1} onclick={() => goPage(data.pageNumber - 1)}>[p] prev</button>
+                <button type="button" class="control min-h-8" disabled={data.pageNumber >= pages} onclick={() => goPage(data.pageNumber + 1)}>[n] next</button>
+            </span>
+        </div>
+    </section>
+
+    {#if selected}
+        <aside aria-label="交易詳細" class="panel hidden self-start p-3.5 lg:sticky lg:top-3 lg:block">
+            <div class="mb-3 flex items-center justify-between">
+                <h2 class="label">TXN #{selected.id}</h2>
+                <button type="button" class="text-mute hover:text-ink" aria-label="關閉詳細" onclick={() => (selectedId = undefined)}>[x]</button>
+            </div>
+            {@render detail(selected)}
+        </aside>
+    {/if}
+</div>
+
+<Dialog bind:open={sheet} title="交易詳細">
+    {#if selected}
+        <div class="flex items-center justify-between border-b border-line px-4 py-3">
+            <h2 class="label">TXN #{selected.id}</h2>
+            <button type="button" class="text-mute" aria-label="關閉" onclick={() => (sheet = false)}>[x]</button>
+        </div>
+        <div class="p-4">{@render detail(selected)}</div>
+    {/if}
+</Dialog>

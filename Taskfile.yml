@@ -10,6 +10,9 @@ includes:
   parser:
     taskfile: services/parser/Taskfile.yml
     dir: services/parser
+  web:
+    taskfile: web/Taskfile.yml
+    dir: web
 
 tasks:
   proto:
@@ -50,4 +53,5 @@ tasks:
       - task: proto:check
       - task: parser:check
       - task: backend:check
+      - task: web:check
       - task: shellcheck

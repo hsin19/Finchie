@@ -10,6 +10,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"mime/multipart"
 	"net/http"
 	"net/url"
@@ -80,6 +81,19 @@ func (e TransactionKind) Valid() bool {
 	}
 }
 
+// CardTotal defines model for CardTotal.
+type CardTotal struct {
+	// Amount Decimal number as a string, e.g. "-6552.97"
+	//
+	// Example: 1234.50
+	Amount Decimal `json:"amount"`
+
+	// CardLast4 Absent for rows not tied to a card
+	CardLast4   *string `json:"cardLast4,omitempty"`
+	Count       int     `json:"count"`
+	Institution string  `json:"institution"`
+}
+
 // Decimal Decimal number as a string, e.g. "-6552.97"
 //
 // Example: 1234.50
@@ -111,6 +125,16 @@ type Document struct {
 // transactions don't add up to the statement. duplicate: the same statement came from
 // another document. failed: the parser could not read it (see `error`).
 type DocumentStatus string
+
+// KindTotal defines model for KindTotal.
+type KindTotal struct {
+	// Amount Decimal number as a string, e.g. "-6552.97"
+	//
+	// Example: 1234.50
+	Amount Decimal         `json:"amount"`
+	Count  int             `json:"count"`
+	Kind   TransactionKind `json:"kind"`
+}
 
 // Problem defines model for Problem.
 type Problem struct {
@@ -150,7 +174,8 @@ type Statement struct {
 	// TotalDue Decimal number as a string, e.g. "-6552.97"
 	//
 	// Example: 1234.50
-	TotalDue Decimal `json:"totalDue"`
+	TotalDue         Decimal `json:"totalDue"`
+	TransactionCount int     `json:"transactionCount"`
 }
 
 // Transaction defines model for Transaction.
@@ -163,6 +188,7 @@ type Transaction struct {
 	Country     *string         `json:"country,omitempty"`
 	Description string          `json:"description"`
 	Id          int64           `json:"id"`
+	Institution string          `json:"institution"`
 	Kind        TransactionKind `json:"kind"`
 
 	// OriginalAmount Decimal number as a string, e.g. "-6552.97"
@@ -171,11 +197,27 @@ type Transaction struct {
 	OriginalAmount   *Decimal            `json:"originalAmount,omitempty"`
 	OriginalCurrency *string             `json:"originalCurrency,omitempty"`
 	PostingDate      *openapi_types.Date `json:"postingDate,omitempty"`
+	StatementId      int64               `json:"statementId"`
 	TransactionDate  openapi_types.Date  `json:"transactionDate"`
 }
 
 // TransactionKind defines model for TransactionKind.
 type TransactionKind string
+
+// TransactionSearch defines model for TransactionSearch.
+type TransactionSearch struct {
+	ByCard []CardTotal   `json:"byCard"`
+	ByKind []KindTotal   `json:"byKind"`
+	Items  []Transaction `json:"items"`
+
+	// Sum Decimal number as a string, e.g. "-6552.97"
+	//
+	// Example: 1234.50
+	Sum Decimal `json:"sum"`
+
+	// Total Rows matching every filter
+	Total int `json:"total"`
+}
 
 // Id defines model for Id.
 type Id = int64
@@ -198,6 +240,30 @@ type ListStatementsParams struct {
 	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
+// SearchTransactionsParams defines parameters for SearchTransactions.
+type SearchTransactionsParams struct {
+	// From First transaction date, inclusive
+	From *openapi_types.Date `form:"from,omitempty" json:"from,omitempty"`
+
+	// To Last transaction date, inclusive
+	To          *openapi_types.Date `form:"to,omitempty" json:"to,omitempty"`
+	Kind        *[]TransactionKind  `form:"kind,omitempty" json:"kind,omitempty"`
+	Institution *string             `form:"institution,omitempty" json:"institution,omitempty"`
+
+	// Card Last four digits of the card
+	Card *string `form:"card,omitempty" json:"card,omitempty"`
+
+	// Overseas Only rows charged in a foreign currency or in another country
+	Overseas *bool `form:"overseas,omitempty" json:"overseas,omitempty"`
+
+	// Q Case-insensitive substring of the description
+	Q *string `form:"q,omitempty" json:"q,omitempty"`
+
+	// Limit Page size; 0 returns only the totals
+	Limit  *int `form:"limit,omitempty" json:"limit,omitempty"`
+	Offset *int `form:"offset,omitempty" json:"offset,omitempty"`
+}
+
 // UploadDocumentMultipartRequestBody defines body for UploadDocument for multipart/form-data ContentType.
 type UploadDocumentMultipartRequestBody UploadDocumentMultipartBody
 
@@ -212,6 +278,9 @@ type ServerInterface interface {
 
 	// (GET /api/documents/{id})
 	GetDocument(ctx *echo.Context, id Id) error
+	// GetDocumentContent The original file exactly as uploaded
+	// (GET /api/documents/{id}/content)
+	GetDocumentContent(ctx *echo.Context, id Id) error
 	// ReparseDocument Parse the stored original again, e.g. after a parser fix
 	// (POST /api/documents/{id}/reparse)
 	ReparseDocument(ctx *echo.Context, id Id) error
@@ -219,8 +288,14 @@ type ServerInterface interface {
 	// (GET /api/statements)
 	ListStatements(ctx *echo.Context, params ListStatementsParams) error
 
+	// (GET /api/statements/{id})
+	GetStatement(ctx *echo.Context, id Id) error
+
 	// (GET /api/statements/{id}/transactions)
 	ListStatementTransactions(ctx *echo.Context, id Id) error
+	// SearchTransactions Transactions across every statement, newest first, with totals for the whole match
+	// (GET /api/transactions)
+	SearchTransactions(ctx *echo.Context, params SearchTransactionsParams) error
 }
 
 // ServerInterfaceWrapper converts echo contexts to parameters.
@@ -271,6 +346,22 @@ func (w *ServerInterfaceWrapper) GetDocument(ctx *echo.Context) error {
 	return err
 }
 
+// GetDocumentContent converts echo context to params.
+func (w *ServerInterfaceWrapper) GetDocumentContent(ctx *echo.Context) error {
+	var err error
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", ctx.Param("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: ctx.Request().URL.RawPath == ""})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter id: %s", err))
+	}
+
+	// Invoke the callback with all the unmarshaled arguments
+	err = w.Handler.GetDocumentContent(ctx, id)
+	return err
+}
+
 // ReparseDocument converts echo context to params.
 func (w *ServerInterfaceWrapper) ReparseDocument(ctx *echo.Context) error {
 	var err error
@@ -305,6 +396,22 @@ func (w *ServerInterfaceWrapper) ListStatements(ctx *echo.Context) error {
 	return err
 }
 
+// GetStatement converts echo context to params.
+func (w *ServerInterfaceWrapper) GetStatement(ctx *echo.Context) error {
+	var err error
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", ctx.Param("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: ctx.Request().URL.RawPath == ""})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter id: %s", err))
+	}
+
+	// Invoke the callback with all the unmarshaled arguments
+	err = w.Handler.GetStatement(ctx, id)
+	return err
+}
+
 // ListStatementTransactions converts echo context to params.
 func (w *ServerInterfaceWrapper) ListStatementTransactions(ctx *echo.Context) error {
 	var err error
@@ -318,6 +425,80 @@ func (w *ServerInterfaceWrapper) ListStatementTransactions(ctx *echo.Context) er
 
 	// Invoke the callback with all the unmarshaled arguments
 	err = w.Handler.ListStatementTransactions(ctx, id)
+	return err
+}
+
+// SearchTransactions converts echo context to params.
+func (w *ServerInterfaceWrapper) SearchTransactions(ctx *echo.Context) error {
+	var err error
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SearchTransactionsParams
+	// ------------- Optional query parameter "from" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "from", ctx.QueryParams(), &params.From, runtime.BindQueryParameterOptions{Type: "string", Format: "date"})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter from: %s", err))
+	}
+
+	// ------------- Optional query parameter "to" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "to", ctx.QueryParams(), &params.To, runtime.BindQueryParameterOptions{Type: "string", Format: "date"})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter to: %s", err))
+	}
+
+	// ------------- Optional query parameter "kind" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "kind", ctx.QueryParams(), &params.Kind, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter kind: %s", err))
+	}
+
+	// ------------- Optional query parameter "institution" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "institution", ctx.QueryParams(), &params.Institution, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter institution: %s", err))
+	}
+
+	// ------------- Optional query parameter "card" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "card", ctx.QueryParams(), &params.Card, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter card: %s", err))
+	}
+
+	// ------------- Optional query parameter "overseas" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "overseas", ctx.QueryParams(), &params.Overseas, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter overseas: %s", err))
+	}
+
+	// ------------- Optional query parameter "q" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "q", ctx.QueryParams(), &params.Q, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter q: %s", err))
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", ctx.QueryParams(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter limit: %s", err))
+	}
+
+	// ------------- Optional query parameter "offset" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "offset", ctx.QueryParams(), &params.Offset, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter offset: %s", err))
+	}
+
+	// Invoke the callback with all the unmarshaled arguments
+	err = w.Handler.SearchTransactions(ctx, params)
 	return err
 }
 
@@ -372,8 +553,11 @@ func RegisterHandlersWithOptions(router EchoRouter, si ServerInterface, options 
 	router.POST(options.BaseURL+"/api/documents", wrapper.UploadDocument, options.OperationMiddlewares["uploadDocument"]...)
 	router.GET(options.BaseURL+"/api/documents/:id", wrapper.GetDocument, options.OperationMiddlewares["getDocument"]...)
 	router.POST(options.BaseURL+"/api/documents/:id/reparse", wrapper.ReparseDocument, options.OperationMiddlewares["reparseDocument"]...)
+	router.GET(options.BaseURL+"/api/documents/:id/content", wrapper.GetDocumentContent, options.OperationMiddlewares["getDocumentContent"]...)
 	router.GET(options.BaseURL+"/api/statements", wrapper.ListStatements, options.OperationMiddlewares["listStatements"]...)
+	router.GET(options.BaseURL+"/api/statements/:id", wrapper.GetStatement, options.OperationMiddlewares["getStatement"]...)
 	router.GET(options.BaseURL+"/api/statements/:id/transactions", wrapper.ListStatementTransactions, options.OperationMiddlewares["listStatementTransactions"]...)
+	router.GET(options.BaseURL+"/api/transactions", wrapper.SearchTransactions, options.OperationMiddlewares["searchTransactions"]...)
 
 }
 
@@ -501,6 +685,57 @@ func (response GetDocument404JSONResponse) VisitGetDocumentResponse(w http.Respo
 	return err
 }
 
+type GetDocumentContentRequestObject struct {
+	Id Id `json:"id"`
+}
+
+type GetDocumentContentResponseObject interface {
+	VisitGetDocumentContentResponse(w http.ResponseWriter) error
+}
+
+type GetDocumentContent200ResponseHeaders struct {
+	ContentDisposition *string
+}
+
+type GetDocumentContent200AsteriskResponse struct {
+	Body          io.Reader
+	Headers       GetDocumentContent200ResponseHeaders
+	ContentType   string
+	ContentLength int64
+}
+
+func (response GetDocumentContent200AsteriskResponse) VisitGetDocumentContentResponse(w http.ResponseWriter) error {
+
+	w.Header().Set("Content-Type", response.ContentType)
+	if response.ContentLength != 0 {
+		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	if response.Headers.ContentDisposition != nil {
+		w.Header().Set("Content-Disposition", fmt.Sprint(*response.Headers.ContentDisposition))
+	}
+	w.WriteHeader(200)
+
+	if closer, ok := response.Body.(io.ReadCloser); ok {
+		defer closer.Close()
+	}
+	_, err := io.Copy(w, response.Body)
+	return err
+}
+
+type GetDocumentContent404JSONResponse struct{ ProblemJSONResponse }
+
+func (response GetDocumentContent404JSONResponse) VisitGetDocumentContentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ReparseDocumentRequestObject struct {
 	Id Id `json:"id"`
 }
@@ -559,6 +794,42 @@ func (response ListStatements200JSONResponse) VisitListStatementsResponse(w http
 	return err
 }
 
+type GetStatementRequestObject struct {
+	Id Id `json:"id"`
+}
+
+type GetStatementResponseObject interface {
+	VisitGetStatementResponse(w http.ResponseWriter) error
+}
+
+type GetStatement200JSONResponse Statement
+
+func (response GetStatement200JSONResponse) VisitGetStatementResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetStatement404JSONResponse struct{ ProblemJSONResponse }
+
+func (response GetStatement404JSONResponse) VisitGetStatementResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListStatementTransactionsRequestObject struct {
 	Id Id `json:"id"`
 }
@@ -595,6 +866,28 @@ func (response ListStatementTransactions404JSONResponse) VisitListStatementTrans
 	return err
 }
 
+type SearchTransactionsRequestObject struct {
+	Params SearchTransactionsParams
+}
+
+type SearchTransactionsResponseObject interface {
+	VisitSearchTransactionsResponse(w http.ResponseWriter) error
+}
+
+type SearchTransactions200JSONResponse TransactionSearch
+
+func (response SearchTransactions200JSONResponse) VisitSearchTransactionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 	// ListDocuments Uploaded documents, newest first
@@ -606,6 +899,9 @@ type StrictServerInterface interface {
 
 	// (GET /api/documents/{id})
 	GetDocument(ctx context.Context, request GetDocumentRequestObject) (GetDocumentResponseObject, error)
+	// GetDocumentContent The original file exactly as uploaded
+	// (GET /api/documents/{id}/content)
+	GetDocumentContent(ctx context.Context, request GetDocumentContentRequestObject) (GetDocumentContentResponseObject, error)
 	// ReparseDocument Parse the stored original again, e.g. after a parser fix
 	// (POST /api/documents/{id}/reparse)
 	ReparseDocument(ctx context.Context, request ReparseDocumentRequestObject) (ReparseDocumentResponseObject, error)
@@ -613,8 +909,14 @@ type StrictServerInterface interface {
 	// (GET /api/statements)
 	ListStatements(ctx context.Context, request ListStatementsRequestObject) (ListStatementsResponseObject, error)
 
+	// (GET /api/statements/{id})
+	GetStatement(ctx context.Context, request GetStatementRequestObject) (GetStatementResponseObject, error)
+
 	// (GET /api/statements/{id}/transactions)
 	ListStatementTransactions(ctx context.Context, request ListStatementTransactionsRequestObject) (ListStatementTransactionsResponseObject, error)
+	// SearchTransactions Transactions across every statement, newest first, with totals for the whole match
+	// (GET /api/transactions)
+	SearchTransactions(ctx context.Context, request SearchTransactionsRequestObject) (SearchTransactionsResponseObject, error)
 }
 
 type StrictHandlerFunc func(ctx *echo.Context, request any) (any, error)
@@ -708,6 +1010,31 @@ func (sh *strictHandler) GetDocument(ctx *echo.Context, id Id) error {
 	return nil
 }
 
+// GetDocumentContent operation middleware
+func (sh *strictHandler) GetDocumentContent(ctx *echo.Context, id Id) error {
+	var request GetDocumentContentRequestObject
+
+	request.Id = id
+
+	handler := func(ctx *echo.Context, request interface{}) (interface{}, error) {
+		return sh.ssi.GetDocumentContent(ctx.Request().Context(), request.(GetDocumentContentRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetDocumentContent")
+	}
+
+	response, err := handler(ctx, request)
+
+	if err != nil {
+		return err
+	} else if validResponse, ok := response.(GetDocumentContentResponseObject); ok {
+		return validResponse.VisitGetDocumentContentResponse(ctx.Response())
+	} else if response != nil {
+		return fmt.Errorf("unexpected response type: %T", response)
+	}
+	return nil
+}
+
 // ReparseDocument operation middleware
 func (sh *strictHandler) ReparseDocument(ctx *echo.Context, id Id) error {
 	var request ReparseDocumentRequestObject
@@ -758,6 +1085,31 @@ func (sh *strictHandler) ListStatements(ctx *echo.Context, params ListStatements
 	return nil
 }
 
+// GetStatement operation middleware
+func (sh *strictHandler) GetStatement(ctx *echo.Context, id Id) error {
+	var request GetStatementRequestObject
+
+	request.Id = id
+
+	handler := func(ctx *echo.Context, request interface{}) (interface{}, error) {
+		return sh.ssi.GetStatement(ctx.Request().Context(), request.(GetStatementRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetStatement")
+	}
+
+	response, err := handler(ctx, request)
+
+	if err != nil {
+		return err
+	} else if validResponse, ok := response.(GetStatementResponseObject); ok {
+		return validResponse.VisitGetStatementResponse(ctx.Response())
+	} else if response != nil {
+		return fmt.Errorf("unexpected response type: %T", response)
+	}
+	return nil
+}
+
 // ListStatementTransactions operation middleware
 func (sh *strictHandler) ListStatementTransactions(ctx *echo.Context, id Id) error {
 	var request ListStatementTransactionsRequestObject
@@ -783,35 +1135,73 @@ func (sh *strictHandler) ListStatementTransactions(ctx *echo.Context, id Id) err
 	return nil
 }
 
+// SearchTransactions operation middleware
+func (sh *strictHandler) SearchTransactions(ctx *echo.Context, params SearchTransactionsParams) error {
+	var request SearchTransactionsRequestObject
+
+	request.Params = params
+
+	handler := func(ctx *echo.Context, request interface{}) (interface{}, error) {
+		return sh.ssi.SearchTransactions(ctx.Request().Context(), request.(SearchTransactionsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SearchTransactions")
+	}
+
+	response, err := handler(ctx, request)
+
+	if err != nil {
+		return err
+	} else if validResponse, ok := response.(SearchTransactionsResponseObject); ok {
+		return validResponse.VisitSearchTransactionsResponse(ctx.Response())
+	} else if response != nil {
+		return fmt.Errorf("unexpected response type: %T", response)
+	}
+	return nil
+}
+
 // Base64 encoded, compressed with deflate, json marshaled OpenAPI spec.
 // Stored as a slice of fixed-width chunks rather than one concatenated
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"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",
+	"/wEA",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

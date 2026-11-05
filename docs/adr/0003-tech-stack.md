@@ -7,7 +7,7 @@ Finchie is a side project. Trying interesting technology and practising it is an
 | Area | Choice | Why |
 |---|---|---|
 | Backend language | Go | Practice; small static binary; simple concurrency for jobs |
-| HTTP API | Echo v5 + oapi-codegen (strict server) | Contract-first like the proto: `api/openapi.yaml` generates typed handlers, and later a TypeScript client. Revisit when the web client is chosen (REST client vs. Connect) |
+| HTTP API | Echo v5 + oapi-codegen (strict server) | Contract-first like the proto: `api/openapi.yaml` generates typed handlers, and later a TypeScript client. Revisit when the web client is chosen (REST client vs. Connect) (ADR 0007 kept REST: openapi-typescript and openapi-fetch) |
 | Database access | pgx v5 + sqlc | Type-safe Go generated from plain SQL |
 | Migrations | goose, embedded in the binary, applied at startup | Plain SQL files, no separate migration step to forget |
 | Background jobs | River | Durable jobs, retries, and periodic jobs stored in the same Postgres; no Redis or message broker |
@@ -18,7 +18,7 @@ Finchie is a side project. Trying interesting technology and practising it is an
 | Integration tests | testcontainers-go with the homelab's Postgres version | Tests run against real Postgres, not mocks |
 | Parser settings | pydantic-settings | Typed settings from environment variables |
 | Python tooling | uv, ruff, pytest | Carried over from V1 |
-| Web | TypeScript; framework chosen when work starts | |
+| Web | TypeScript; framework chosen when work starts (SvelteKit, ADR 0007) | |
 | Deployment | Images on GHCR, homelab Docker Compose, Cloudflare Tunnel and Access | Same path as the homelab's other services |
 | Developer tools | Pinned through Go `tool` directives or `go run module@version` | Nothing to install globally besides Go, uv, Task, and Docker |
 

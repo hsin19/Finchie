@@ -40,13 +40,20 @@ tasks:
       - task: lint
       - task: test
 
+  web:
+    desc: Build the web app into internal/web/dist, so the next build or `task backend:run` serves it
+    cmds:
+      - task: :web:build
+      - find internal/web/dist -mindepth 1 ! -name .gitkeep -delete
+      - cp -R ../../web/build/. internal/web/dist/
+
   run:
-    desc: Start the backend on :8080 (reads ../../.local/backend.env)
+    desc: Start the backend on :8080 (reads ../../.local/backend.env); run `task backend:web` first for the UI
     dotenv: ['../../.local/backend.env']
     cmds:
       - go run ./cmd/backend
 
   image:
-    desc: Build the container image
+    desc: Build the container image (from the repository root, since it embeds web/)
     cmds:
-      - docker build -t {{.IMAGE}}:dev .
+      - docker build -f Dockerfile -t {{.IMAGE}}:dev ../..

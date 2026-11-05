@@ -10,12 +10,17 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
+	"mime"
 	"mime/multipart"
 	"path/filepath"
 	"strings"
 
+	"github.com/jackc/pgx/v5/pgtype"
+
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	openapi_types "github.com/oapi-codegen/runtime/types"
 	"github.com/riverqueue/river"
 
 	"github.com/hsin19/Finchie/services/backend/internal/db/dbq"
@@ -129,6 +134,24 @@ func (s *Server) ReparseDocument(ctx context.Context, request ReparseDocumentReq
 	return ReparseDocument202JSONResponse(doc), nil
 }
 
+func (s *Server) GetDocumentContent(ctx context.Context, request GetDocumentContentRequestObject) (GetDocumentContentResponseObject, error) {
+	row, err := dbq.New(s.pool).GetDocumentContent(ctx, request.Id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return GetDocumentContent404JSONResponse{notFound("document", request.Id)}, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get document %d content: %w", request.Id, err)
+	}
+	// inline: a browser shows PDFs in place; e-mails download either way.
+	disposition := mime.FormatMediaType("inline", map[string]string{"filename": row.Filename})
+	return GetDocumentContent200AsteriskResponse{
+		Body:          bytes.NewReader(row.Content),
+		ContentType:   row.ContentType,
+		ContentLength: int64(len(row.Content)),
+		Headers:       GetDocumentContent200ResponseHeaders{ContentDisposition: &disposition},
+	}, nil
+}
+
 func (s *Server) ListStatements(ctx context.Context, request ListStatementsRequestObject) (ListStatementsResponseObject, error) {
 	rows, err := dbq.New(s.pool).ListStatements(ctx, limit(request.Params.Limit))
 	if err != nil {
@@ -139,6 +162,17 @@ func (s *Server) ListStatements(ctx context.Context, request ListStatementsReque
 		statements = append(statements, toStatement(row))
 	}
 	return statements, nil
+}
+
+func (s *Server) GetStatement(ctx context.Context, request GetStatementRequestObject) (GetStatementResponseObject, error) {
+	row, err := dbq.New(s.pool).GetStatement(ctx, request.Id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return GetStatement404JSONResponse{notFound("statement", request.Id)}, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get statement %d: %w", request.Id, err)
+	}
+	return GetStatement200JSONResponse(toStatement(dbq.ListStatementsRow(row))), nil
 }
 
 func (s *Server) ListStatementTransactions(ctx context.Context, request ListStatementTransactionsRequestObject) (ListStatementTransactionsResponseObject, error) {
@@ -159,6 +193,54 @@ func (s *Server) ListStatementTransactions(ctx context.Context, request ListStat
 		transactions = append(transactions, toTransaction(row))
 	}
 	return transactions, nil
+}
+
+func (s *Server) SearchTransactions(ctx context.Context, request SearchTransactionsRequestObject) (SearchTransactionsResponseObject, error) {
+	params := request.Params
+	filter := dbq.SearchTransactionsParams{
+		FromDate:    date(params.From),
+		ToDate:      date(params.To),
+		Institution: blankAsNil(params.Institution),
+		CardLast4:   blankAsNil(params.Card),
+		Overseas:    params.Overseas != nil && *params.Overseas,
+		Query:       blankAsNil(params.Q),
+		RowLimit:    clamp(params.Limit, defaultLimit, 0, 500),
+		RowOffset:   clamp(params.Offset, 0, 0, math.MaxInt32),
+	}
+	if params.Kind != nil {
+		filter.Kinds = make([]string, 0, len(*params.Kind))
+		for _, kind := range *params.Kind {
+			filter.Kinds = append(filter.Kinds, string(kind))
+		}
+	}
+
+	queries := dbq.New(s.pool)
+	result := TransactionSearch{Items: []Transaction{}}
+	if filter.RowLimit > 0 {
+		rows, err := queries.SearchTransactions(ctx, filter)
+		if err != nil {
+			return nil, fmt.Errorf("search transactions: %w", err)
+		}
+		for _, row := range rows {
+			result.Items = append(result.Items, toTransaction(dbq.ListTransactionsRow(row)))
+		}
+	}
+	groups, err := queries.TransactionTotals(ctx, dbq.TransactionTotalsParams{
+		Kinds:       filter.Kinds,
+		Institution: filter.Institution,
+		CardLast4:   filter.CardLast4,
+		FromDate:    filter.FromDate,
+		ToDate:      filter.ToDate,
+		Overseas:    filter.Overseas,
+		Query:       filter.Query,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("total transactions: %w", err)
+	}
+	total, byKind, byCard := summarize(groups)
+	result.Total, result.Sum = total.count, decimalString(total.amount)
+	result.ByKind, result.ByCard = byKind, byCard
+	return SearchTransactions200JSONResponse(result), nil
 }
 
 func (s *Server) document(ctx context.Context, id int64) (Document, error) {
@@ -225,6 +307,29 @@ func limit(requested *Limit) int32 {
 	}
 	// The spec allows 1-500, but the generated handlers do not enforce it.
 	return int32(min(max(*requested, 1), 500)) //nolint:gosec // clamped above
+}
+
+// clamp applies a query parameter's default and range, which the generated handlers do not enforce.
+func clamp(requested *int, fallback, lo, hi int) int32 {
+	if requested == nil {
+		return int32(fallback) //nolint:gosec // a small constant
+	}
+	return int32(min(max(*requested, lo), hi)) //nolint:gosec // clamped to hi, at most MaxInt32
+}
+
+func date(d *openapi_types.Date) pgtype.Date {
+	if d == nil {
+		return pgtype.Date{}
+	}
+	return pgtype.Date{Time: d.Time, Valid: true}
+}
+
+func blankAsNil(s *string) *string {
+	if s == nil || strings.TrimSpace(*s) == "" {
+		return nil
+	}
+	trimmed := strings.TrimSpace(*s)
+	return &trimmed
 }
 
 func notFound(what string, id int64) ProblemJSONResponse {

@@ -30,7 +30,10 @@ services:
 
   backend:
     profiles: [app]
-    build: services/backend
+    build:
+      # The backend embeds web/, so it builds from the repository root.
+      context: .
+      dockerfile: services/backend/Dockerfile
     init: true
     environment:
       BACKEND_DATABASE_URL: postgres://finchie:finchie@postgres:5432/finchie?sslmode=disable

@@ -44,6 +44,49 @@ func (q *Queries) FindStatementByKey(ctx context.Context, arg FindStatementByKey
 	return i, err
 }
 
+const getStatement = `-- name: GetStatement :one
+SELECT s.id, s.document_id, s.institution, s.closing_date, s.due_date, s.currency, s.total_due,
+       s.computed_new_charges, s.stated_new_charges, s.stated_label, s.balanced,
+       (SELECT count(*) FROM transactions t WHERE t.statement_id = s.id)::integer AS transaction_count
+FROM statements s
+WHERE s.id = $1
+`
+
+type GetStatementRow struct {
+	ID                 int64
+	DocumentID         int64
+	Institution        string
+	ClosingDate        pgtype.Date
+	DueDate            pgtype.Date
+	Currency           string
+	TotalDue           pgtype.Numeric
+	ComputedNewCharges pgtype.Numeric
+	StatedNewCharges   pgtype.Numeric
+	StatedLabel        string
+	Balanced           bool
+	TransactionCount   int32
+}
+
+func (q *Queries) GetStatement(ctx context.Context, id int64) (GetStatementRow, error) {
+	row := q.db.QueryRow(ctx, getStatement, id)
+	var i GetStatementRow
+	err := row.Scan(
+		&i.ID,
+		&i.DocumentID,
+		&i.Institution,
+		&i.ClosingDate,
+		&i.DueDate,
+		&i.Currency,
+		&i.TotalDue,
+		&i.ComputedNewCharges,
+		&i.StatedNewCharges,
+		&i.StatedLabel,
+		&i.Balanced,
+		&i.TransactionCount,
+	)
+	return i, err
+}
+
 const insertStatement = `-- name: InsertStatement :one
 INSERT INTO statements (document_id, institution, closing_date, due_date, currency, total_due,
                         computed_new_charges, stated_new_charges, stated_label, balanced)
@@ -98,22 +141,38 @@ type InsertTransactionsParams struct {
 }
 
 const listStatements = `-- name: ListStatements :many
-SELECT id, document_id, institution, closing_date, due_date, currency, total_due,
-       computed_new_charges, stated_new_charges, stated_label, balanced
-FROM statements
-ORDER BY closing_date DESC, id DESC
+SELECT s.id, s.document_id, s.institution, s.closing_date, s.due_date, s.currency, s.total_due,
+       s.computed_new_charges, s.stated_new_charges, s.stated_label, s.balanced,
+       (SELECT count(*) FROM transactions t WHERE t.statement_id = s.id)::integer AS transaction_count
+FROM statements s
+ORDER BY s.closing_date DESC, s.id DESC
 LIMIT $1
 `
 
-func (q *Queries) ListStatements(ctx context.Context, rowLimit int32) ([]Statement, error) {
+type ListStatementsRow struct {
+	ID                 int64
+	DocumentID         int64
+	Institution        string
+	ClosingDate        pgtype.Date
+	DueDate            pgtype.Date
+	Currency           string
+	TotalDue           pgtype.Numeric
+	ComputedNewCharges pgtype.Numeric
+	StatedNewCharges   pgtype.Numeric
+	StatedLabel        string
+	Balanced           bool
+	TransactionCount   int32
+}
+
+func (q *Queries) ListStatements(ctx context.Context, rowLimit int32) ([]ListStatementsRow, error) {
 	rows, err := q.db.Query(ctx, listStatements, rowLimit)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Statement
+	var items []ListStatementsRow
 	for rows.Next() {
-		var i Statement
+		var i ListStatementsRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.DocumentID,
@@ -126,6 +185,7 @@ func (q *Queries) ListStatements(ctx context.Context, rowLimit int32) ([]Stateme
 			&i.StatedNewCharges,
 			&i.StatedLabel,
 			&i.Balanced,
+			&i.TransactionCount,
 		); err != nil {
 			return nil, err
 		}
@@ -138,15 +198,18 @@ func (q *Queries) ListStatements(ctx context.Context, rowLimit int32) ([]Stateme
 }
 
 const listTransactions = `-- name: ListTransactions :many
-SELECT id, transaction_date, posting_date, description, kind, amount, original_amount, original_currency,
-       country, card_last4
-FROM transactions
-WHERE statement_id = $1
-ORDER BY line_no
+SELECT t.id, t.statement_id, s.institution, t.transaction_date, t.posting_date, t.description, t.kind, t.amount,
+       t.original_amount, t.original_currency, t.country, t.card_last4
+FROM transactions t
+JOIN statements s ON s.id = t.statement_id
+WHERE t.statement_id = $1
+ORDER BY t.line_no
 `
 
 type ListTransactionsRow struct {
 	ID               int64
+	StatementID      int64
+	Institution      string
 	TransactionDate  pgtype.Date
 	PostingDate      pgtype.Date
 	Description      string
@@ -169,6 +232,8 @@ func (q *Queries) ListTransactions(ctx context.Context, statementID int64) ([]Li
 		var i ListTransactionsRow
 		if err := rows.Scan(
 			&i.ID,
+			&i.StatementID,
+			&i.Institution,
 			&i.TransactionDate,
 			&i.PostingDate,
 			&i.Description,

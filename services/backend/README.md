@@ -1,6 +1,6 @@
 # backend
 
-The only public service (ADR 0002). It stores uploaded documents, parses them in background jobs through the parser service, keeps the results in Postgres, and serves them over HTTP.
+The only public service (ADR 0002). It stores uploaded documents, parses them in background jobs through the parser service, keeps the results in Postgres, and serves them over HTTP together with the web app (ADR 0007).
 
 ## API
 
@@ -11,10 +11,14 @@ Defined spec-first in [`api/openapi.yaml`](api/openapi.yaml); `oapi-codegen` gen
 | `POST` | `/api/documents` | Multipart field `file`: an `.eml` or PDF. `201` when new, `200` when the same bytes were uploaded before |
 | `GET` | `/api/documents` | Newest first, `?limit=` up to 500 |
 | `GET` | `/api/documents/{id}` | Status, parser, warnings, error |
-| `POST` | `/api/documents/{id}/reparse` | Parse the stored original again |
-| `GET` | `/api/statements` | Newest closing date first |
+| `GET` | `/api/documents/{id}/content` | The original file, with the content type detected at upload |
+| `POST` | `/api/documents/{id}/reparse` | Parse the stored original again. The document's statement is replaced, so it gets a new id |
+| `GET` | `/api/statements` | Newest closing date first, with each statement's transaction count |
+| `GET` | `/api/statements/{id}` | One statement |
 | `GET` | `/api/statements/{id}/transactions` | In statement order |
+| `GET` | `/api/transactions` | Across all statements, newest first. Filters: `from`, `to`, `kind` (repeatable), `institution`, `card`, `overseas`, `q`; `limit` 0–500 and `offset`. Returns the page plus `total` and `sum` for the whole match, and `byKind` / `byCard` facets that each ignore their own filter |
 | `GET` | `/healthz` | `200` when the database answers |
+| `GET` | anything else | The web app: a file from the embedded build, or its `200.html` shell for client-side routes. Unknown `/api/` paths stay `404` |
 
 Amounts are decimal strings; statement dates are `YYYY-MM-DD` (ADR 0004).
 
@@ -64,8 +68,10 @@ task backend:run
 
 Integration tests need a Docker daemon and are skipped without one. Testcontainers uses `DOCKER_HOST` or the current Docker context; with Colima, `docker context use colima` (or `DOCKER_HOST=unix://$HOME/.colima/default/docker.sock`).
 
-Generated code (`internal/gen/`, `internal/db/dbq/`, `internal/api/openapi.gen.go`) is committed; don't edit it.
+Generated code (`internal/gen/`, `internal/db/dbq/`, `internal/api/openapi.gen.go`) is committed; don't edit it. After changing `api/openapi.yaml`, also run `task web:generate` for the web app's types.
+
+The web app is embedded from `internal/web/dist/` (gitignored apart from `.gitkeep`). `task backend:web` builds `web/` and copies it there; without it, the binary still serves the API and answers app routes with a hint to build the UI.
 
 ## Image
 
-`Dockerfile`: static binary on distroless, uid 1654. The container healthcheck runs `/backend healthcheck`.
+`Dockerfile`: builds `web/` in a Node stage, embeds it, then a static binary on distroless, uid 1654. The build context is the repository root (`docker build -f services/backend/Dockerfile .`, or `task backend:image`); `Dockerfile.dockerignore` limits it to `web/` and `services/backend/`. The container healthcheck runs `/backend healthcheck`.

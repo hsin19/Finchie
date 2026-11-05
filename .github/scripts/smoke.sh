@@ -55,6 +55,12 @@ case "$app" in
       -e BACKEND_PARSER_ADDR=parser:50051 \
       "$image" >/dev/null
     wait_for "/healthz answers ok" curl -fsS http://127.0.0.1:8080/healthz
+    # Any app route gets the embedded web app's shell, which loads its scripts from /_app/.
+    if ! curl -fsS http://127.0.0.1:8080/statements | grep -q '/_app/immutable/'; then
+      echo "::error::backend: the web app is not embedded (no /_app/ scripts in the page)"
+      exit 1
+    fi
+    echo "backend: serves the web app"
     ;;
   *)
     echo "unknown app: $app (expected backend or parser)" >&2

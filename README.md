@@ -12,7 +12,7 @@ A self-hosted personal finance platform. It turns bank and credit card statement
 
 | Path | What it is | Status |
 |---|---|---|
-| [`services/backend`](services/backend/) | Go. The only public service: API, document ingestion, background jobs, and (later) the web app's static files. Owns the database. | ✅ Upload, parse, and read statements |
+| [`services/backend`](services/backend/) | Go. The only public service: API, document ingestion, background jobs, and the web app (embedded). Owns the database. | ✅ Upload, parse, and read statements |
 | [`services/parser`](services/parser/) | Python. Stateless parser behind gRPC: a raw statement goes in, structured data comes out. Internal only. | ✅ 4 banks |
 
 **Shared**
@@ -20,9 +20,9 @@ A self-hosted personal finance platform. It turns bank and credit card statement
 | Path | What it is | Status |
 |---|---|---|
 | [`proto/`](proto/) | gRPC contracts, managed with buf. Generated code is committed inside each service. | ✅ |
-| `web/` | TypeScript web app | Planned |
+| [`web/`](web/) | SvelteKit single-page app, built into the backend binary | ✅ Overview, statements, transactions, upload |
 
-Design decisions and their reasons are in [`docs/adr/`](docs/adr/): 0001 rewrite as V2, 0002 architecture, 0003 tech stack, 0004 money and dates, 0005 ingestion pipeline, 0006 test data.
+Design decisions and their reasons are in [`docs/adr/`](docs/adr/): 0001 rewrite as V2, 0002 architecture, 0003 tech stack, 0004 money and dates, 0005 ingestion pipeline, 0006 test data, 0007 web app.
 
 ## Why V2
 
@@ -36,6 +36,7 @@ browser ── Cloudflare Access ── Tunnel ──▶ backend (Go) ── gRP
                                              └── Postgres
 ```
 
+- The backend serves the web app and the API from one origin; the app is a static build embedded in the binary.
 - The backend stores every uploaded document as-is, then a background job asks the parser to read it. Parsed results can always be rebuilt from the stored originals.
 - Every parsed statement is reconciled: the transactions must add up to the amount printed on the statement. Statements that don't are kept but flagged for review instead of being trusted.
 - The parser never touches the database. Retries, back-off, and concurrency limits live in the backend's job queue.
@@ -53,14 +54,17 @@ Upload the e-mail (`.eml`) or the PDF itself.
 
 ## Getting started
 
-Prerequisites: Go 1.27+, [uv](https://docs.astral.sh/uv/), [Task](https://taskfile.dev/), Docker (for Postgres).
+Prerequisites: Go 1.27+, [uv](https://docs.astral.sh/uv/), Node 26 and pnpm, [Task](https://taskfile.dev/), Docker (for Postgres).
 
 ```sh
 task --list              # everything you can run
-task check               # what CI runs: proto checks, lint, and tests for both services
+task web:install         # web dependencies
+task check               # what CI runs: proto checks, lint, tests, and the web build
 docker compose up -d     # local Postgres
 task parser:run          # gRPC on :50051
-task backend:run         # HTTP on :8080
+task backend:web         # build the web app into the backend (optional for API-only work)
+task backend:run         # HTTP on :8080: the web app and /api
+task web:dev             # or: Vite on :5173 with hot reload, /api proxied to :8080
 curl -F file=@statement.eml localhost:8080/api/documents
 ```
 
@@ -72,7 +76,7 @@ Local configuration and secrets go in `.local/` (gitignored):
 | `.local/parser.env` | `PARSER_PDF_PASSWORDS__<INSTITUTION>=…` for each bank whose PDFs are encrypted |
 | `.local/statements/` | Real statements for `task parser:test-real` |
 
-`docker compose --profile app up --build` runs Postgres, the parser, and the backend as containers (needs BuildKit, i.e. `docker buildx`). See each service's README for every variable it reads.
+`docker compose --profile app up --build` runs Postgres, the parser, and the backend (web app included) as containers (needs BuildKit, i.e. `docker buildx`). See each service's README for every variable it reads.
 
 ## CI and releases
 

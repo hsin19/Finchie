@@ -24,6 +24,7 @@ import (
 	"github.com/hsin19/Finchie/services/backend/internal/db"
 	parserv1 "github.com/hsin19/Finchie/services/backend/internal/gen/finchie/parser/v1"
 	"github.com/hsin19/Finchie/services/backend/internal/ingest"
+	"github.com/hsin19/Finchie/services/backend/internal/web"
 )
 
 func main() {
@@ -100,6 +101,7 @@ func run() error {
 		return c.String(http.StatusOK, "ok")
 	})
 	api.RegisterHandlers(e, api.NewStrictHandler(api.NewServer(pool, jobs, cfg.MaxUploadBytes()), nil))
+	web.Register(e)
 
 	slog.Info("listening", "addr", cfg.HTTPAddr, "parser", cfg.ParserAddr)
 	serveErr := echo.StartConfig{Address: cfg.HTTPAddr, HideBanner: true, GracefulTimeout: 10 * time.Second}.Start(ctx, e)

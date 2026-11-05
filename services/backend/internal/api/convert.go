@@ -32,7 +32,7 @@ func toDocument(row dbq.GetDocumentRow) Document {
 	return doc
 }
 
-func toStatement(row dbq.Statement) Statement {
+func toStatement(row dbq.ListStatementsRow) Statement {
 	return Statement{
 		Id:          row.ID,
 		DocumentId:  row.DocumentID,
@@ -47,12 +47,15 @@ func toStatement(row dbq.Statement) Statement {
 			Stated:      decimalString(row.StatedNewCharges),
 			StatedLabel: row.StatedLabel,
 		},
+		TransactionCount: int(row.TransactionCount),
 	}
 }
 
 func toTransaction(row dbq.ListTransactionsRow) Transaction {
 	tx := Transaction{
 		Id:               row.ID,
+		StatementId:      row.StatementID,
+		Institution:      row.Institution,
 		TransactionDate:  openapi_types.Date{Time: row.TransactionDate.Time},
 		Description:      row.Description,
 		Kind:             TransactionKind(row.Kind),

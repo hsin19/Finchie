@@ -80,6 +80,26 @@ paths:
         "404":
           $ref: "#/components/responses/Problem"
 
+  /api/documents/{id}/content:
+    get:
+      operationId: getDocumentContent
+      summary: The original file exactly as uploaded
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: The stored bytes, with the content type detected at upload
+          headers:
+            Content-Disposition:
+              schema: { type: string }
+          content:
+            "*/*":
+              schema:
+                type: string
+                format: binary
+        "404":
+          $ref: "#/components/responses/Problem"
+
   /api/statements:
     get:
       operationId: listStatements
@@ -94,6 +114,20 @@ paths:
               schema:
                 type: array
                 items: { $ref: "#/components/schemas/Statement" }
+
+  /api/statements/{id}:
+    get:
+      operationId: getStatement
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: The statement
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Statement" }
+        "404":
+          $ref: "#/components/responses/Problem"
 
   /api/statements/{id}/transactions:
     get:
@@ -110,6 +144,59 @@ paths:
                 items: { $ref: "#/components/schemas/Transaction" }
         "404":
           $ref: "#/components/responses/Problem"
+
+  /api/transactions:
+    get:
+      operationId: searchTransactions
+      summary: Transactions across every statement, newest first, with totals for the whole match
+      description: |
+        Filters combine with AND. `total` and `sum` cover every matching row, not just this page.
+        `byKind` and `byCard` are facets: each ignores its own filter (byKind ignores `kind`, byCard
+        ignores `institution` and `card`), so a picker can show the options it would switch to.
+      parameters:
+        - name: from
+          in: query
+          description: First transaction date, inclusive
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          description: Last transaction date, inclusive
+          schema: { type: string, format: date }
+        - name: kind
+          in: query
+          style: form
+          explode: true
+          schema:
+            type: array
+            items: { $ref: "#/components/schemas/TransactionKind" }
+        - name: institution
+          in: query
+          schema: { type: string }
+        - name: card
+          in: query
+          description: Last four digits of the card
+          schema: { type: string }
+        - name: overseas
+          in: query
+          description: Only rows charged in a foreign currency or in another country
+          schema: { type: boolean }
+        - name: q
+          in: query
+          description: Case-insensitive substring of the description
+          schema: { type: string }
+        - name: limit
+          in: query
+          description: Page size; 0 returns only the totals
+          schema: { type: integer, minimum: 0, maximum: 500, default: 100 }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        "200":
+          description: One page of matches and the totals
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TransactionSearch" }
 
 components:
   parameters:
@@ -165,7 +252,7 @@ components:
 
     Statement:
       type: object
-      required: [id, documentId, institution, closingDate, dueDate, currency, totalDue, reconciliation]
+      required: [id, documentId, institution, closingDate, dueDate, currency, totalDue, reconciliation, transactionCount]
       properties:
         id: { type: integer, format: int64 }
         documentId: { type: integer, format: int64 }
@@ -175,6 +262,7 @@ components:
         currency: { type: string, example: TWD }
         totalDue: { $ref: "#/components/schemas/Decimal" }
         reconciliation: { $ref: "#/components/schemas/Reconciliation" }
+        transactionCount: { type: integer }
 
     Reconciliation:
       type: object
@@ -191,9 +279,11 @@ components:
 
     Transaction:
       type: object
-      required: [id, transactionDate, description, kind, amount]
+      required: [id, statementId, institution, transactionDate, description, kind, amount]
       properties:
         id: { type: integer, format: int64 }
+        statementId: { type: integer, format: int64 }
+        institution: { type: string }
         transactionDate: { type: string, format: date }
         postingDate: { type: string, format: date }
         description: { type: string }
@@ -203,6 +293,39 @@ components:
         originalCurrency: { type: string }
         country: { type: string }
         cardLast4: { type: string }
+
+    TransactionSearch:
+      type: object
+      required: [items, total, sum, byKind, byCard]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Transaction" }
+        total: { type: integer, description: Rows matching every filter }
+        sum: { $ref: "#/components/schemas/Decimal" }
+        byKind:
+          type: array
+          items: { $ref: "#/components/schemas/KindTotal" }
+        byCard:
+          type: array
+          items: { $ref: "#/components/schemas/CardTotal" }
+
+    KindTotal:
+      type: object
+      required: [kind, count, amount]
+      properties:
+        kind: { $ref: "#/components/schemas/TransactionKind" }
+        count: { type: integer }
+        amount: { $ref: "#/components/schemas/Decimal" }
+
+    CardTotal:
+      type: object
+      required: [institution, count, amount]
+      properties:
+        institution: { type: string }
+        cardLast4: { type: string, description: Absent for rows not tied to a card, such as payments }
+        count: { type: integer }
+        amount: { $ref: "#/components/schemas/Decimal" }
 
     Problem:
       type: object
