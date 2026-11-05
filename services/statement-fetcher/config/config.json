@@ -9,6 +9,19 @@
             "token_file": "config/secrets/gmail/token.json",
             "output_dir": "data/fetched_result/gmail",
             "disable": false
+        },
+        "imap": {
+            "host": "imap.gmail.com",
+            "port": 993,
+            "user": "",
+            "password": null,
+            "password_env_var": "IMAP_PASSWORD",
+            "mailbox": "INBOX",
+            "query": "label:bill",
+            "days_ago": 30,
+            "use_gmail_search": true,
+            "output_dir": "data/fetched_result/imap",
+            "disable": true
         }
     },
     "document_processor": {

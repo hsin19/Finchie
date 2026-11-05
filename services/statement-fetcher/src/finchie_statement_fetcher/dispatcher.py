@@ -3,7 +3,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-from finchie_statement_fetcher.fetcher import fetch_gmail_messages
+from finchie_statement_fetcher.fetcher import fetch_gmail_messages, fetch_imap_messages
 from finchie_statement_fetcher.models import Statement
 from finchie_statement_fetcher.processor import BaseProcessor, TsibProcessor
 from finchie_statement_fetcher.storer import BaseStorer, LocalJsonStorer
@@ -76,6 +76,8 @@ def _fetch_data(config: Any) -> list[str]:
         match source:
             case "gmail":
                 result += fetch_gmail_messages(source_config)
+            case "imap":
+                result += fetch_imap_messages(source_config)
 
     return result
 
