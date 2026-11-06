@@ -8,6 +8,8 @@ FROM transactions t
 JOIN statements s ON s.id = t.statement_id
 WHERE (sqlc.narg(from_date)::date IS NULL OR t.transaction_date >= sqlc.narg(from_date)::date)
   AND (sqlc.narg(to_date)::date IS NULL OR t.transaction_date <= sqlc.narg(to_date)::date)
+  AND (sqlc.narg(closing_from)::date IS NULL OR s.closing_date >= sqlc.narg(closing_from)::date)
+  AND (sqlc.narg(closing_to)::date IS NULL OR s.closing_date <= sqlc.narg(closing_to)::date)
   AND (sqlc.narg(kinds)::text[] IS NULL OR t.kind = ANY (sqlc.narg(kinds)::text[]))
   AND (sqlc.narg(institution)::text IS NULL OR s.institution = sqlc.narg(institution)::text)
   AND (sqlc.narg(card_last4)::text IS NULL OR t.card_last4 = sqlc.narg(card_last4)::text)
@@ -32,6 +34,8 @@ FROM transactions t
 JOIN statements s ON s.id = t.statement_id
 WHERE (sqlc.narg(from_date)::date IS NULL OR t.transaction_date >= sqlc.narg(from_date)::date)
   AND (sqlc.narg(to_date)::date IS NULL OR t.transaction_date <= sqlc.narg(to_date)::date)
+  AND (sqlc.narg(closing_from)::date IS NULL OR s.closing_date >= sqlc.narg(closing_from)::date)
+  AND (sqlc.narg(closing_to)::date IS NULL OR s.closing_date <= sqlc.narg(closing_to)::date)
   AND (NOT @overseas::boolean OR t.original_currency IS NOT NULL OR t.country <> 'TW')
   AND (sqlc.narg(query)::text IS NULL OR strpos(lower(t.description), lower(sqlc.narg(query)::text)) > 0)
 GROUP BY t.kind, s.institution, t.card_last4

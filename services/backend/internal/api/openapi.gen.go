@@ -240,7 +240,13 @@ type SearchTransactionsParams struct {
 	From *openapi_types.Date `form:"from,omitempty" json:"from,omitempty"`
 
 	// To Last transaction date, inclusive
-	To          *openapi_types.Date `form:"to,omitempty" json:"to,omitempty"`
+	To *openapi_types.Date `form:"to,omitempty" json:"to,omitempty"`
+
+	// ClosingFrom First closing date of the transaction's statement, inclusive
+	ClosingFrom *openapi_types.Date `form:"closingFrom,omitempty" json:"closingFrom,omitempty"`
+
+	// ClosingTo Last closing date of the transaction's statement, inclusive
+	ClosingTo   *openapi_types.Date `form:"closingTo,omitempty" json:"closingTo,omitempty"`
 	Kind        *[]TransactionKind  `form:"kind,omitempty" json:"kind,omitempty"`
 	Institution *string             `form:"institution,omitempty" json:"institution,omitempty"`
 
@@ -440,6 +446,20 @@ func (w *ServerInterfaceWrapper) SearchTransactions(ctx *echo.Context) error {
 	err = runtime.BindQueryParameterWithOptions("form", true, false, "to", ctx.QueryParams(), &params.To, runtime.BindQueryParameterOptions{Type: "string", Format: "date"})
 	if err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter to: %s", err))
+	}
+
+	// ------------- Optional query parameter "closingFrom" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "closingFrom", ctx.QueryParams(), &params.ClosingFrom, runtime.BindQueryParameterOptions{Type: "string", Format: "date"})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter closingFrom: %s", err))
+	}
+
+	// ------------- Optional query parameter "closingTo" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "closingTo", ctx.QueryParams(), &params.ClosingTo, runtime.BindQueryParameterOptions{Type: "string", Format: "date"})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter closingTo: %s", err))
 	}
 
 	// ------------- Optional query parameter "kind" -------------

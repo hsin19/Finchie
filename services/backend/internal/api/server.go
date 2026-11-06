@@ -207,6 +207,8 @@ func (s *Server) SearchTransactions(ctx context.Context, request SearchTransacti
 	filter := dbq.SearchTransactionsParams{
 		FromDate:    date(params.From),
 		ToDate:      date(params.To),
+		ClosingFrom: date(params.ClosingFrom),
+		ClosingTo:   date(params.ClosingTo),
 		Institution: blankAsNil(params.Institution),
 		CardLast4:   blankAsNil(params.Card),
 		Overseas:    params.Overseas != nil && *params.Overseas,
@@ -238,6 +240,8 @@ func (s *Server) SearchTransactions(ctx context.Context, request SearchTransacti
 		CardLast4:   filter.CardLast4,
 		FromDate:    filter.FromDate,
 		ToDate:      filter.ToDate,
+		ClosingFrom: filter.ClosingFrom,
+		ClosingTo:   filter.ClosingTo,
 		Overseas:    filter.Overseas,
 		Query:       filter.Query,
 	})

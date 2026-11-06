@@ -19,18 +19,22 @@ FROM transactions t
 JOIN statements s ON s.id = t.statement_id
 WHERE ($1::date IS NULL OR t.transaction_date >= $1::date)
   AND ($2::date IS NULL OR t.transaction_date <= $2::date)
-  AND ($3::text[] IS NULL OR t.kind = ANY ($3::text[]))
-  AND ($4::text IS NULL OR s.institution = $4::text)
-  AND ($5::text IS NULL OR t.card_last4 = $5::text)
-  AND (NOT $6::boolean OR t.original_currency IS NOT NULL OR t.country <> 'TW')
-  AND ($7::text IS NULL OR strpos(lower(t.description), lower($7::text)) > 0)
+  AND ($3::date IS NULL OR s.closing_date >= $3::date)
+  AND ($4::date IS NULL OR s.closing_date <= $4::date)
+  AND ($5::text[] IS NULL OR t.kind = ANY ($5::text[]))
+  AND ($6::text IS NULL OR s.institution = $6::text)
+  AND ($7::text IS NULL OR t.card_last4 = $7::text)
+  AND (NOT $8::boolean OR t.original_currency IS NOT NULL OR t.country <> 'TW')
+  AND ($9::text IS NULL OR strpos(lower(t.description), lower($9::text)) > 0)
 ORDER BY t.transaction_date DESC, t.statement_id DESC, t.line_no
-LIMIT $9 OFFSET $8
+LIMIT $11 OFFSET $10
 `
 
 type SearchTransactionsParams struct {
 	FromDate    pgtype.Date
 	ToDate      pgtype.Date
+	ClosingFrom pgtype.Date
+	ClosingTo   pgtype.Date
 	Kinds       []string
 	Institution *string
 	CardLast4   *string
@@ -61,6 +65,8 @@ func (q *Queries) SearchTransactions(ctx context.Context, arg SearchTransactions
 	rows, err := q.db.Query(ctx, searchTransactions,
 		arg.FromDate,
 		arg.ToDate,
+		arg.ClosingFrom,
+		arg.ClosingTo,
 		arg.Kinds,
 		arg.Institution,
 		arg.CardLast4,
@@ -114,8 +120,10 @@ FROM transactions t
 JOIN statements s ON s.id = t.statement_id
 WHERE ($4::date IS NULL OR t.transaction_date >= $4::date)
   AND ($5::date IS NULL OR t.transaction_date <= $5::date)
-  AND (NOT $6::boolean OR t.original_currency IS NOT NULL OR t.country <> 'TW')
-  AND ($7::text IS NULL OR strpos(lower(t.description), lower($7::text)) > 0)
+  AND ($6::date IS NULL OR s.closing_date >= $6::date)
+  AND ($7::date IS NULL OR s.closing_date <= $7::date)
+  AND (NOT $8::boolean OR t.original_currency IS NOT NULL OR t.country <> 'TW')
+  AND ($9::text IS NULL OR strpos(lower(t.description), lower($9::text)) > 0)
 GROUP BY t.kind, s.institution, t.card_last4
 ORDER BY t.kind, s.institution, t.card_last4
 `
@@ -126,6 +134,8 @@ type TransactionTotalsParams struct {
 	CardLast4   *string
 	FromDate    pgtype.Date
 	ToDate      pgtype.Date
+	ClosingFrom pgtype.Date
+	ClosingTo   pgtype.Date
 	Overseas    bool
 	Query       *string
 }
@@ -149,6 +159,8 @@ func (q *Queries) TransactionTotals(ctx context.Context, arg TransactionTotalsPa
 		arg.CardLast4,
 		arg.FromDate,
 		arg.ToDate,
+		arg.ClosingFrom,
+		arg.ClosingTo,
 		arg.Overseas,
 		arg.Query,
 	)

@@ -252,6 +252,11 @@ onKeys({
     </div>
     <div class="flex flex-wrap items-center gap-2">
         <MonthSelect all months={data.months} value={data.period} onchange={m => void navigate({ m })} />
+        {#if data.filters.closing}
+            <button type="button" class="control pressed" title="移除這個篩選" onclick={() => void navigate({ closing: null })}>
+                {data.filters.closing} 結帳的帳單 <span class="text-mute">×</span>
+            </button>
+        {/if}
         <select class="control" aria-label="卡片" value={cardValue} onchange={event => void navigate({ card: event.currentTarget.value || null })}>
             <option value="">all cards</option>
             {#each cardOptions as option (option.value)}

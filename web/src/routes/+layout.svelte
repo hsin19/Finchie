@@ -29,11 +29,11 @@ $effect(() => {
 
 let palette = $state(false);
 
-// Switching pages keeps the selected month.
+// Switching between statements and transactions keeps the selected month; the overview has none.
 const month = $derived(page.url.searchParams.get("m"));
 const query = $derived<"" | `?m=${string}`>(month ? `?m=${month}` : "");
 const nav = $derived([
-    { key: "o", label: "總覽", href: resolve(`/${query}`), current: page.route.id === "/" },
+    { key: "o", label: "總覽", href: resolve("/"), current: page.route.id === "/" },
     { key: "s", label: "帳單", href: resolve(`/statements${query}`), current: page.route.id?.startsWith("/statements") ?? false },
     { key: "t", label: "交易", href: resolve(`/transactions${query}`), current: page.route.id === "/transactions" },
     { key: "u", label: "上傳", href: resolve("/upload"), current: page.route.id === "/upload" },
@@ -45,16 +45,16 @@ const prompt = $derived.by(() => {
     const path = custom ?? (page.url.pathname === "/" ? "overview" : page.url.pathname.slice(1));
     const params = page.url.searchParams;
     const flags = [...new Set(params.keys())].map(key => ({
-        name: `--${key === "m" ? "period" : key}`,
-        value: key === "overseas" ? "" : params.getAll(key).join(","),
+        name: key === "all" ? "-a" : `--${key === "m" ? "period" : key}`,
+        value: key === "overseas" || key === "all" ? "" : params.getAll(key).join(","),
     }));
     return { path, flags };
 });
 
-// "Switch month": on the transactions page it keeps the other filters; elsewhere it opens the
-// overview for that month.
+// "Switch month": on the transactions page it keeps the other filters; elsewhere it opens that
+// month's statements.
 function monthHref(m: Month) {
-    if (page.route.id !== "/transactions") return resolve(`/?m=${m}`);
+    if (page.route.id !== "/transactions") return resolve(`/statements?m=${m}`);
     const rest = [...page.url.searchParams].filter(([key]) => key !== "m" && key !== "page");
     return resolve(`/transactions?${new URLSearchParams([["m", m], ...rest]).toString()}`);
 }
@@ -110,7 +110,7 @@ function onkeydown(event: KeyboardEvent) {
 <div class="mx-auto flex min-h-dvh max-w-[1240px] flex-col gap-3 px-3.5 pt-3.5 pb-28 md:px-5 md:pt-5 md:pb-6">
     <header class="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-line pb-2.5 md:panel md:px-3.5 md:py-2.5">
         <div class="min-w-0 grow truncate text-[14px]">
-            <a href={resolve(`/${query}`)} class="font-bold text-accent">finchie</a>
+            <a href={resolve("/")} class="font-bold text-accent">finchie</a>
             <span class="text-mute">~/</span>{prompt.path}{#each prompt.flags as flag (flag.name)}
                 <span class="text-mute">{` ${flag.name}`}</span>{flag.value ? ` ${flag.value}` : ""}
             {/each}

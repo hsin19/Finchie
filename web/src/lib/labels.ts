@@ -18,17 +18,23 @@ export type Tone = keyof typeof tone;
 interface Institution {
     name: string;
     code: string;
+    /** Chart color. Fixed per bank, so a bank keeps its color whichever others are on screen. */
+    color: string;
 }
 
+// Chart colors in this order pass the color-vision checks for neighbors in a stack, on the panel color.
 const institutions: Record<string, Institution> = {
-    cathay: { name: "國泰", code: "CUB" },
-    esun: { name: "玉山", code: "ESUN" },
-    hsbc: { name: "滙豐", code: "HSBC" },
-    taishin: { name: "台新", code: "TSB" },
+    taishin: { name: "台新", code: "TSB", color: "#3987e5" },
+    cathay: { name: "國泰", code: "CUB", color: "#d95926" },
+    hsbc: { name: "滙豐", code: "HSBC", color: "#199e70" },
+    esun: { name: "玉山", code: "ESUN", color: "#c98500" },
 };
 
+/** Banks in chart order; a bank without a color comes after them. */
+export const institutionOrder = Object.keys(institutions);
+
 export function institution(id: string): Institution {
-    return institutions[id] ?? { name: id, code: id.toUpperCase() };
+    return institutions[id] ?? { name: id, code: id.toUpperCase(), color: "var(--color-mute)" };
 }
 
 /** "HSBC··4417", or just "HSBC" for rows without a card. */

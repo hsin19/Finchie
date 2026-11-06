@@ -134,6 +134,17 @@ func TestSearchTransactionsFiltersAndTotals(t *testing.T) {
 		t.Fatalf("last page: total=%d items=%d", page.Total, len(page.Items))
 	}
 
+	// By statement instead of by transaction date: HSBC's statement closing 10-20 also carries a
+	// payment dated 09-30, which the October transaction-date filter above leaves out.
+	closing := decode[TransactionSearch](t, get(t, e, "/api/transactions?closingFrom=2026-10-11&closingTo=2026-10-31&limit=0"))
+	if closing.Total != 4 || closing.Sum != "-20009.44" || len(closing.ByCard) != 2 || closing.ByCard[0].Institution != "hsbc" {
+		t.Fatalf("closing 10-11..10-31: total=%d sum=%s byCard=%+v", closing.Total, closing.Sum, closing.ByCard)
+	}
+	closingPurchases := decode[TransactionSearch](t, get(t, e, "/api/transactions?closingFrom=2026-10-01&closingTo=2026-10-10&kind=purchase"))
+	if closingPurchases.Total != 1 || closingPurchases.Items[0].Institution != "esun" {
+		t.Fatalf("purchases closing 10-01..10-10: %+v", closingPurchases)
+	}
+
 	none := decode[TransactionSearch](t, get(t, e, "/api/transactions?from=2030-01-01"))
 	if none.Total != 0 || none.Sum != "0" || len(none.ByKind) != 0 {
 		t.Fatalf("empty match = %+v", none)

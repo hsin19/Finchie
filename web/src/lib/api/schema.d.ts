@@ -475,6 +475,10 @@ export interface operations {
                 from?: string;
                 /** @description Last transaction date, inclusive */
                 to?: string;
+                /** @description First closing date of the transaction's statement, inclusive */
+                closingFrom?: string;
+                /** @description Last closing date of the transaction's statement, inclusive */
+                closingTo?: string;
                 kind?: components["schemas"]["TransactionKind"][];
                 institution?: string;
                 /** @description Last four digits of the card */

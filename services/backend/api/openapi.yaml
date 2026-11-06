@@ -167,6 +167,14 @@ paths:
           in: query
           description: Last transaction date, inclusive
           schema: { type: string, format: date }
+        - name: closingFrom
+          in: query
+          description: First closing date of the transaction's statement, inclusive
+          schema: { type: string, format: date }
+        - name: closingTo
+          in: query
+          description: Last closing date of the transaction's statement, inclusive
+          schema: { type: string, format: date }
         - name: kind
           in: query
           style: form
