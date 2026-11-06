@@ -3,7 +3,10 @@ import "./layout.css";
 import { LEDGER } from "#lib/api/client.js";
 import CommandPalette, { type Command } from "#lib/components/CommandPalette.svelte";
 import HelpDialog from "#lib/components/HelpDialog.svelte";
-import { shortDateTime } from "#lib/dates.js";
+import {
+    type Month,
+    shortDateTime,
+} from "#lib/dates.js";
 import { onKeys } from "#lib/keys.svelte.js";
 import {
     goto,
@@ -48,8 +51,13 @@ const prompt = $derived.by(() => {
     return { path, flags };
 });
 
-// Where "switch month" goes: the current page when it filters by month, else the overview.
-const monthRoute = $derived(page.route.id === "/transactions" ? page.route.id : "/");
+// "Switch month": on the transactions page it keeps the other filters; elsewhere it opens the
+// overview for that month.
+function monthHref(m: Month) {
+    if (page.route.id !== "/transactions") return resolve(`/?m=${m}`);
+    const rest = [...page.url.searchParams].filter(([key]) => key !== "m" && key !== "page");
+    return resolve(`/transactions?${new URLSearchParams([["m", m], ...rest]).toString()}`);
+}
 
 const lastUpload = $derived(data.documents[0]);
 const parser = $derived(data.documents.find(d => d.parserVersion)?.parserVersion);
@@ -60,7 +68,7 @@ const commands: Command[] = $derived([
         id: `month-${m}`,
         label: `period ${m}`,
         hint: "切換月份",
-        run: () => void goto(resolve(`${monthRoute}?m=${m}`)),
+        run: () => void goto(monthHref(m)),
     })),
     { id: "refresh", label: "重新載入資料", hint: "refresh", run: () => void refreshAll() },
     { id: "help", label: "快捷鍵說明", hint: "[?]", run: () => (help = true) },

@@ -34,6 +34,7 @@ Node 26 (`.node-version`); the pnpm version is pinned in `package.json`.
 | `src/lib/money.ts` | Exact decimal arithmetic and formatting for amounts (ADR 0004) |
 | `src/lib/labels.ts` | Bank names, kind and status labels, tone classes |
 | `src/lib/fees.ts` | Pairs a foreign purchase with the fee charged for it |
+| `src/lib/keys.ts` | Which key presses are shortcuts: never while typing, never while a dialog is open, never Enter or Space on a focused button or link |
 
 ## Pitfalls (SvelteKit 3)
 

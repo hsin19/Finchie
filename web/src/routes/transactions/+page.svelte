@@ -48,20 +48,45 @@ function navigate(changes: Record<string, string | string[] | null>, { replace =
     return goto(query ? resolve(`/transactions?${query}`) : resolve("/transactions"), { reset: false, replace });
 }
 
-// Search applies while typing, a moment after the last key.
+// Search applies while typing, a moment after the last key. The box follows the URL (Back, [t], the
+// command palette) except when the URL change is the search the box itself sent: by then the user
+// may have typed more.
+const urlQuery = $derived(page.url.searchParams.get("q") ?? "");
 let search = $state(page.url.searchParams.get("q") ?? "");
 let searchTimer: ReturnType<typeof setTimeout> | undefined;
+let sentQuery: string | undefined;
+
+$effect(() => {
+    const q = urlQuery;
+    if (q === sentQuery) {
+        sentQuery = undefined;
+        return;
+    }
+    clearTimeout(searchTimer);
+    search = q;
+});
+
+// Leaving the page drops a search that was not sent yet, instead of navigating back here.
+$effect(() => () => clearTimeout(searchTimer));
+
+function sendSearch() {
+    clearTimeout(searchTimer);
+    const q = search.trim();
+    if (q === urlQuery) return;
+    sentQuery = q;
+    void navigate({ q: q || null }, { replace: true });
+}
 function onSearchInput() {
     clearTimeout(searchTimer);
-    searchTimer = setTimeout(() => void navigate({ q: search.trim() || null }, { replace: true }), 250);
+    searchTimer = setTimeout(sendSearch, 250);
 }
 function onSearchKeydown(event: KeyboardEvent) {
     if (event.key === "Escape") {
         search = "";
-        clearTimeout(searchTimer);
-        void navigate({ q: null }, { replace: true });
+        sendSearch();
     } else if (event.key === "Enter" || event.key === "ArrowDown") {
         event.preventDefault();
+        sendSearch();
         (event.currentTarget as HTMLInputElement).blur();
         selectedId = items[0]?.id;
     }
