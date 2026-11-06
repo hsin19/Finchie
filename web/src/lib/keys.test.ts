@@ -5,7 +5,10 @@ import {
     expect,
     it,
 } from "vitest";
-import { claims } from "./keys";
+import {
+    claims,
+    listen,
+} from "./keys";
 
 /** Dispatches a keydown on `target` and reports whether a shortcut listener on window would take it. */
 function press(target: EventTarget, key: string, init: KeyboardEventInit = {}): boolean | undefined {
@@ -60,5 +63,31 @@ describe("claims", () => {
     it("ignores combinations with modifiers", () => {
         expect(press(document.body, "k", { metaKey: true })).toBe(false);
         expect(press(document.body, "t", { ctrlKey: true })).toBe(false);
+    });
+});
+
+describe("listen", () => {
+    function slash() {
+        document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "/", bubbles: true, cancelable: true }));
+    }
+
+    it("gives a page the key before the layout, even when the layout listened first", () => {
+        const calls: string[] = [];
+        const stopLayout = listen(window, { "/": () => calls.push("layout") }, { global: true });
+        const stopPage = listen(window, { "/": () => calls.push("page") });
+        slash();
+        stopPage();
+        stopLayout();
+        expect(calls).toEqual(["page"]);
+    });
+
+    it("lets the layout have keys the page does not use", () => {
+        const calls: string[] = [];
+        const stopLayout = listen(window, { "/": () => calls.push("layout") }, { global: true });
+        const stopPage = listen(window, { j: () => calls.push("page") });
+        slash();
+        stopPage();
+        stopLayout();
+        expect(calls).toEqual(["layout"]);
     });
 });

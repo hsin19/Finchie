@@ -91,7 +91,7 @@ onKeys({
     "u": () => go("u"),
     "/": () => void searchTransactions(),
     "?": () => (help = !help),
-});
+}, { global: true });
 
 function onkeydown(event: KeyboardEvent) {
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {

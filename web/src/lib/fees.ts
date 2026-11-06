@@ -17,7 +17,13 @@ function rateDistance(fee: Transaction, purchase: Transaction): number {
     return amount === 0 ? Infinity : Math.abs(approx(fee.amount) / amount - TYPICAL_RATE);
 }
 
-function bestMatch(fee: Transaction, purchases: Transaction[]): Transaction | undefined {
+/** E.SUN and Taishin list several cards on one statement; a fee belongs to a purchase on its card. */
+function sameCard(a: Transaction, b: Transaction): boolean {
+    return !a.cardLast4 || !b.cardLast4 || a.cardLast4 === b.cardLast4;
+}
+
+function bestMatch(fee: Transaction, candidates: Transaction[]): Transaction | undefined {
+    const purchases = candidates.filter(p => sameCard(fee, p));
     const key = merchantKey(fee.description);
     if (key) {
         const named = purchases.find(p => merchantKey(p.description).startsWith(key));

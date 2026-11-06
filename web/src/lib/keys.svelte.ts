@@ -1,21 +1,12 @@
-import { claims } from "#lib/keys.js";
+import {
+    type KeyHandlers,
+    listen,
+} from "#lib/keys.js";
 
-// Pages register their shortcuts with onKeys while they are mounted; the layout registers the global
-// ones. A page's handler runs first and wins, because child effects (and so their listeners) are set
-// up before the parent's.
-
-type Handler = (event: KeyboardEvent) => void;
-
-/** Keys are KeyboardEvent.key values; `claims` decides which presses are shortcuts at all. */
-export function onKeys(handlers: Record<string, Handler>): void {
-    $effect(() => {
-        function listener(event: KeyboardEvent) {
-            const handler = handlers[event.key];
-            if (!handler || !claims(event)) return;
-            event.preventDefault();
-            handler(event);
-        }
-        window.addEventListener("keydown", listener);
-        return () => window.removeEventListener("keydown", listener);
-    });
+/**
+ * Shortcuts for as long as the calling component is mounted. Keys are KeyboardEvent.key values.
+ * Pages call it plainly; the layout passes `global`, and a page's handler for the same key wins.
+ */
+export function onKeys(handlers: KeyHandlers, options: { global?: boolean; } = {}): void {
+    $effect(() => listen(window, handlers, options));
 }

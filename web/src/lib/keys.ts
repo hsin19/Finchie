@@ -12,6 +12,27 @@ const CONTROL = "button, a[href], summary, [role='button'], [role='link'], [role
  * typing; not while a modal dialog is open (it owns the keyboard, Esc included); and not Enter or
  * Space on a focused control, which the browser uses to press it.
  */
+export type KeyHandlers = Record<string, (event: KeyboardEvent) => void>;
+
+/**
+ * Listens on `target` (the window) for single-key shortcuts; returns the function that stops. Page
+ * shortcuts listen in the capture phase and global ones (the layout's) in the bubble phase, so a page
+ * always gets the key first. Mount order cannot decide it: after a client-side navigation the layout
+ * has been listening longer than the page that just mounted.
+ */
+export function listen(target: EventTarget, handlers: KeyHandlers, { global = false } = {}): () => void {
+    const options = { capture: !global };
+    const listener = (event: Event) => {
+        const key = event as KeyboardEvent;
+        const handler = handlers[key.key];
+        if (!handler || !claims(key)) return;
+        key.preventDefault();
+        handler(key);
+    };
+    target.addEventListener("keydown", listener, options);
+    return () => target.removeEventListener("keydown", listener, options);
+}
+
 export function claims(event: KeyboardEvent): boolean {
     if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return false;
     const target = event.target instanceof Element ? event.target : null;

@@ -39,6 +39,17 @@ describe("matchingFee", () => {
         expect(matchingFee(fee, [stream, coffee, fee])).toBe(stream);
     });
 
+    it("pairs within a card when a statement lists several", () => {
+        const card = (t: Transaction, last4: string) => ({ ...t, cardLast4: last4 });
+        const onA = card(tx("UBER *TRIP", "purchase", "300", "2026-09-20", 3), "1111");
+        const onB = card(tx("UBER *TRIP", "purchase", "300", "2026-09-20", 3), "2222");
+        const feeOnB = card(tx("國外交易手續費UBER *TRIP", "foreign_transaction_fee", "5", "2026-09-20", 3), "2222");
+        const day = [onA, onB, feeOnB];
+        expect(matchingFee(feeOnB, day)).toBe(onB);
+        expect(matchingFee(onA, day)).toBeUndefined();
+        expect(matchingFee(onB, day)).toBe(feeOnB);
+    });
+
     it("leaves other kinds and other days alone", () => {
         expect(matchingFee(refund, day)).toBeUndefined();
         const otherDay = tx("SSPEMIRATESLLCABUDH", "purchase", "556", "2026-10-17");
