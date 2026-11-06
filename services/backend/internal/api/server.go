@@ -12,6 +12,7 @@ import (
 	"mime"
 	"mime/multipart"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -197,7 +198,11 @@ func (s *Server) ListStatementTransactions(ctx context.Context, request ListStat
 	}
 	transactions := make(ListStatementTransactions200JSONResponse, 0, len(rows))
 	for _, row := range rows {
-		transactions = append(transactions, toTransaction(row))
+		tx, err := toTransaction(row)
+		if err != nil {
+			return nil, err
+		}
+		transactions = append(transactions, tx)
 	}
 	return transactions, nil
 }
@@ -226,6 +231,8 @@ func (s *Server) SearchTransactions(ctx context.Context, request SearchTransacti
 			filter.Kinds = append(filter.Kinds, string(kind))
 		}
 	}
+	// Fees fold into their purchases when purchases are listed; asked for fees alone, they are rows.
+	filter.Fold = filter.Kinds == nil || slices.Contains(filter.Kinds, string(Purchase))
 
 	queries := dbq.New(s.pool)
 	result := TransactionSearch{Items: []Transaction{}}
@@ -235,10 +242,15 @@ func (s *Server) SearchTransactions(ctx context.Context, request SearchTransacti
 			return nil, fmt.Errorf("search transactions: %w", err)
 		}
 		for _, row := range rows {
-			result.Items = append(result.Items, toTransaction(dbq.ListTransactionsRow(row)))
+			tx, err := toTransaction(dbq.ListTransactionsRow(row))
+			if err != nil {
+				return nil, err
+			}
+			result.Items = append(result.Items, tx)
 		}
 	}
 	groups, err := queries.TransactionTotals(ctx, dbq.TransactionTotalsParams{
+		Fold:        filter.Fold,
 		Kinds:       filter.Kinds,
 		Institution: filter.Institution,
 		CardLast4:   filter.CardLast4,
@@ -252,10 +264,51 @@ func (s *Server) SearchTransactions(ctx context.Context, request SearchTransacti
 	if err != nil {
 		return nil, fmt.Errorf("total transactions: %w", err)
 	}
-	total, byKind, byCard := summarize(groups)
+	kinds, err := queries.KindTotals(ctx, dbq.KindTotalsParams{
+		Institution: filter.Institution,
+		CardLast4:   filter.CardLast4,
+		FromDate:    filter.FromDate,
+		ToDate:      filter.ToDate,
+		ClosingFrom: filter.ClosingFrom,
+		ClosingTo:   filter.ClosingTo,
+		Overseas:    filter.Overseas,
+		Query:       filter.Query,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("total transactions by kind: %w", err)
+	}
+	total, byCard := summarize(groups)
+	byKind := kindTotals(kinds)
 	result.Total, result.Sum = total.count, decimalString(total.amount)
 	result.ByKind, result.ByCard = byKind, byCard
 	return SearchTransactions200JSONResponse(result), nil
+}
+
+func (s *Server) GetTransaction(ctx context.Context, request GetTransactionRequestObject) (GetTransactionResponseObject, error) {
+	rows, err := dbq.New(s.pool).TransactionFamily(ctx, request.Id)
+	if err != nil {
+		return nil, fmt.Errorf("get transaction %d: %w", request.Id, err)
+	}
+	family := TransactionFamily{Children: []Transaction{}}
+	found := false
+	for _, row := range rows {
+		tx, err := toTransaction(dbq.ListTransactionsRow(row))
+		if err != nil {
+			return nil, err
+		}
+		switch {
+		case tx.Id == request.Id:
+			family.Transaction, found = tx, true
+		case tx.Parent != nil && tx.Parent.Id == request.Id:
+			family.Children = append(family.Children, tx)
+		default:
+			family.Parent = &tx
+		}
+	}
+	if !found {
+		return GetTransaction404JSONResponse{notFound("transaction", request.Id)}, nil
+	}
+	return GetTransaction200JSONResponse(family), nil
 }
 
 func (s *Server) document(ctx context.Context, id int64) (Document, error) {

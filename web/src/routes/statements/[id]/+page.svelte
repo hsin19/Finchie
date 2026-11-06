@@ -4,6 +4,7 @@ import {
     documentContentUrl,
     LEDGER,
     type Transaction,
+    type TransactionLink,
     unwrap,
 } from "#lib/api/client.js";
 import FileLink from "#lib/components/FileLink.svelte";
@@ -33,6 +34,7 @@ import {
     invalidate,
 } from "$app/navigation";
 import { resolve } from "$app/paths";
+import { page } from "$app/state";
 import type { PageProps } from "./$types";
 
 let { data }: PageProps = $props();
@@ -59,6 +61,23 @@ const byKind = $derived(
         })
         .filter(k => k.rows > 0),
 );
+
+// Lines linked to these (ADR 0009) may be on other statements; ?line= picks the line to show.
+const target = $derived(Number(page.url.searchParams.get("line")) || undefined);
+$effect(() => {
+    if (target !== undefined) document.getElementById(`tx-${target}`)?.scrollIntoView({ block: "center" });
+});
+
+function lineHref(link: TransactionLink) {
+    return resolve(`/statements/[id]?line=${link.id}`, { id: String(link.statementId) });
+}
+
+/** " · 國泰 2026-11" for a line on another statement. */
+function elsewhere(link: TransactionLink) {
+    if (link.statementId === s.id) return "";
+    const other = data.statements.find(st => st.id === link.statementId);
+    return other ? ` · ${institution(other.institution).name} ${monthOf(other.closingDate)}` : "";
+}
 
 // The statement lists lines card by card; mark where each card's lines start.
 type Line = { marker: string; } | { n: number; t: Transaction; };
@@ -216,11 +235,23 @@ onKeys({
                     {#if "marker" in line}
                         <tr><td colspan="7" class="border-t border-dashed border-line py-2 text-[12px] text-mute">{line.marker}</td></tr>
                     {:else}
-                        <tr class="border-t border-rule hover:bg-raised">
+                        <tr id="tx-{line.t.id}" class="border-t border-rule {line.t.id === target ? 'bg-accent/10' : 'hover:bg-raised'}">
                             <td class="py-2 pr-2 text-mute">{String(line.n).padStart(2, "0")}</td>
                             <td class="px-2 py-2">{shortDate(line.t.transactionDate)}</td>
                             <td class="px-2 py-2 text-dim">{line.t.postingDate ? shortDate(line.t.postingDate) : ""}</td>
-                            <td class="px-2 py-2">{line.t.description}</td>
+                            <td class="px-2 py-2">
+                                {line.t.description}
+                                {#if line.t.parent}
+                                    <a href={lineHref(line.t.parent)} class="ml-2 text-[12px] whitespace-nowrap">
+                                        ↑ {kinds[line.t.parent.kind].short} {shortDate(line.t.parent.transactionDate)}{elsewhere(line.t.parent)}
+                                    </a>
+                                {/if}
+                                {#each line.t.children ?? [] as child (child.id)}
+                                    <a href={lineHref(child)} class="ml-2 text-[12px] whitespace-nowrap">
+                                        ↓ {kinds[child.kind].label} {formatAmount(child.amount, { signed: true })}{elsewhere(child)}
+                                    </a>
+                                {/each}
+                            </td>
                             <td class="px-2 py-2 {tone[kinds[line.t.kind].tone]}">{kinds[line.t.kind].short}</td>
                             <td class="px-2 py-2 text-right text-dim">
                                 {line.t.originalAmount && line.t.originalCurrency ? `${line.t.originalCurrency} ${formatAmount(line.t.originalAmount)}` : ""}

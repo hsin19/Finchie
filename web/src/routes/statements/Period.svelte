@@ -107,7 +107,7 @@ const names = (ids: string[]) => ids.map(i => institution(i).name).join("、");
         <div class="text-[11px] {changeTone(dueChange)}">{statements.length} 張 · {changeText(dueChange)}</div>
     </div>
     <div class="panel flex flex-col gap-1 p-3 md:p-3.5">
-        <div class="text-[10px] tracking-[0.12em] text-mute">SPEND · 消費</div>
+        <div class="text-[10px] tracking-[0.12em] text-mute" title="消費加上它的海外手續費，扣掉刷退與點數折抵">SPEND · 淨消費</div>
         <div class="text-[20px] font-bold text-ink-bright md:text-[24px]">{formatAmount(spend)}</div>
         <div class="text-[11px] {changeTone(spendChange)}">{changeText(spendChange)}</div>
     </div>

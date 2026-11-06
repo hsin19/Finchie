@@ -50,4 +50,5 @@ type Transaction struct {
 	OriginalCurrency *string
 	Country          *string
 	CardLast4        *string
+	ParentID         *int64
 }

@@ -1,7 +1,10 @@
 <script lang="ts">
 import {
+    api,
     type Transaction,
+    type TransactionFamily,
     type TransactionKind,
+    type TransactionLink,
     TRANSACTIONS_PAGE_SIZE as PAGE_SIZE,
     type TransactionSort,
 } from "#lib/api/client.js";
@@ -14,7 +17,11 @@ import {
     shortDate,
     weekday,
 } from "#lib/dates.js";
-import { matchingFee } from "#lib/fees.js";
+import {
+    breakdown,
+    net,
+    refundedInFull,
+} from "#lib/family.js";
 import { onKeys } from "#lib/keys.svelte.js";
 import {
     cardLabel,
@@ -129,8 +136,31 @@ function select(t: Transaction | undefined, { open = false } = {}) {
     if (t) document.getElementById(`tx-${t.id}`)?.scrollIntoView({ block: "nearest" });
 }
 
-// A foreign purchase and the fee charged for it.
-const related = $derived(selected ? matchingFee(selected, items) : undefined);
+// The selected line's parent and children (ADR 0009), which may be on other statements.
+let family = $state<TransactionFamily>();
+const linkedId = $derived(selected && (selected.parent || selected.children?.length) ? selected.id : undefined);
+$effect(() => {
+    const id = linkedId;
+    family = undefined;
+    if (id === undefined) return;
+    const controller = new AbortController();
+    api()
+        .GET("/api/transactions/{id}", { params: { path: { id } }, signal: controller.signal })
+        .then(({ data }) => (family = data))
+        // Aborted, or failed: the panel shows the line without its links.
+        .catch(() => undefined);
+    return () => controller.abort();
+});
+
+/** Where a linked line is: its statement, scrolled to the line. */
+function lineHref(link: Pick<TransactionLink, "id" | "statementId">) {
+    return resolve(`/statements/[id]?line=${link.id}`, { id: String(link.statementId) });
+}
+
+function statementLabel(statementId: number) {
+    const statement = statements.get(statementId);
+    return statement ? `${institution(statement.institution).name} ${monthOf(statement.closingDate)}` : `#${statementId}`;
+}
 
 // ---- Paging
 
@@ -163,6 +193,7 @@ const days = $derived.by(() => {
 });
 
 function amountTone(t: Transaction) {
+    if (refundedInFull(t)) return "text-mute";
     return t.kind === "purchase" ? "text-ink" : tone[kinds[t.kind].tone];
 }
 
@@ -190,12 +221,32 @@ onKeys({
 });
 </script>
 
+{#snippet linked(l: Transaction, arrow: string, from: Transaction)}
+    <a href={lineHref(l)} class="flex flex-col gap-0.5 rounded-[4px] px-1.5 py-1 text-ink hover:bg-raised hover:text-ink">
+        <span class="flex gap-2">
+            <span class="text-accent">{arrow}</span>
+            <span class={tone[kinds[l.kind].tone]}>{kinds[l.kind].short}</span>
+            <span class="grow truncate">{l.description}</span>
+            <span class={l.kind === "purchase" ? "text-ink" : tone[kinds[l.kind].tone]}>{formatAmount(l.amount)}</span>
+        </span>
+        <span class="pl-5 text-[12px] text-mute">
+            {shortDate(l.transactionDate)}{l.statementId === from.statementId ? "" : ` · ${statementLabel(l.statementId)}`}
+            {#if l.kind === "foreign_transaction_fee" && approx(from.amount) > 0}
+                · {((approx(l.amount) / approx(from.amount)) * 100).toFixed(1)}%
+            {/if}
+        </span>
+    </a>
+{/snippet}
+
 {#snippet detail(t: Transaction)}
     {@const statement = statements.get(t.statementId)}
     {@const doc = statement ? documents.get(statement.documentId) : undefined}
     <div class="flex flex-col gap-3">
         <div class="text-[16px] font-bold break-words">{t.description}</div>
-        <div class="text-[24px] font-bold {amountTone(t)}">{formatAmount(t.amount)} <span class="text-[13px] font-normal text-mute">{statement?.currency ?? "TWD"}</span></div>
+        <div class="flex flex-col gap-0.5">
+            <div class="text-[24px] font-bold {amountTone(t)}">{formatAmount(net(t))} <span class="text-[13px] font-normal text-mute">{statement?.currency ?? "TWD"}</span></div>
+            {#if breakdown(t)}<div class="text-[12px] text-dim">{breakdown(t)}{refundedInFull(t) ? " · 已全額刷退" : ""}</div>{/if}
+        </div>
         <dl class="m-0 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5">
             <dt class="text-mute">date</dt>
             <dd class="m-0">{t.transactionDate}{t.postingDate && t.postingDate !== t.transactionDate ? `（入帳 ${shortDate(t.postingDate)}）` : ""}</dd>
@@ -225,18 +276,15 @@ onKeys({
                 <dd class="m-0 text-dim">{doc.parser} v{doc.parserVersion}</dd>
             {/if}
         </dl>
-        {#if related}
-            {@const [fee, purchase] = related.kind === "foreign_transaction_fee" ? [related, t] : [t, related]}
+        {#if family && (family.parent || family.children.length > 0)}
             <div class="flex flex-col gap-1 border-t border-dashed border-line pt-2.5">
-                <div class="label">RELATED</div>
-                <button type="button" class="flex gap-2 text-left text-ink" onclick={() => select(related)}>
-                    <span class={tone[kinds[related.kind].tone]}>{kinds[related.kind].short}</span>
-                    <span class="grow truncate">{related.description}</span>
-                    <span class={amountTone(related)}>{formatAmount(related.amount)}</span>
-                    {#if approx(purchase.amount) !== 0}
-                        <span class="text-mute">({((approx(fee.amount) / approx(purchase.amount)) * 100).toFixed(1)}%)</span>
-                    {/if}
-                </button>
+                <div class="label">LINKED · 關聯</div>
+                {#if family.parent}
+                    {@render linked(family.parent, "↑", t)}
+                {/if}
+                {#each family.children as child (child.id)}
+                    {@render linked(child, "↓", t)}
+                {/each}
             </div>
         {/if}
         {#if doc}
@@ -344,12 +392,15 @@ onKeys({
                         >
                             <td class="py-2 pr-1 text-accent">{t.id === selectedId ? "▶" : ""}</td>
                             <td class="px-2 py-2 whitespace-nowrap">{shortDate(t.transactionDate)}</td>
-                            <td class="max-w-[320px] truncate px-2 py-2">{t.description}</td>
+                            <td class="max-w-[320px] px-2 py-2">
+                                <span class="block truncate">{t.description}</span>
+                                {#if breakdown(t)}<span class="block truncate text-[11px] text-mute">{breakdown(t)}</span>{/if}
+                            </td>
                             <td class="px-2 py-2 {tone[kinds[t.kind].tone]}">{kinds[t.kind].short}</td>
                             <td class="px-2 py-2 whitespace-nowrap text-dim">{cardLabel(t.institution, t.cardLast4)}</td>
                             <td class="px-2 py-2 text-dim">{t.country ?? "—"}</td>
                             <td class="px-2 py-2 text-right whitespace-nowrap text-dim">{original(t)}</td>
-                            <td class="py-2 pl-2 text-right whitespace-nowrap {amountTone(t)}">{formatAmount(t.amount)}</td>
+                            <td class="py-2 pl-2 text-right whitespace-nowrap {amountTone(t)}">{formatAmount(net(t))}</td>
                         </tr>
                     {:else}
                         <tr class="border-t border-rule"><td colspan="8" class="py-3 text-mute">沒有符合的交易。</td></tr>
@@ -363,10 +414,10 @@ onKeys({
             <button type="button" class="flex min-h-11 w-full flex-col gap-0.5 border-t border-rule py-2.5 text-left text-ink" onclick={() => select(t, { open: true })}>
                 <span class="flex w-full justify-between gap-2.5">
                     <span class="truncate">{t.description}</span>
-                    <span class="shrink-0 {amountTone(t)}">{formatAmount(t.amount)}</span>
+                    <span class="shrink-0 {amountTone(t)}">{formatAmount(net(t))}</span>
                 </span>
                 <span class="text-[12px] text-mute">
-                    {withDate ? `${shortDate(t.transactionDate)} · ` : ""}{cardLabel(t.institution, t.cardLast4)} · {kinds[t.kind].short}{original(t) ? ` · ${original(t)}` : ""}
+                    {withDate ? `${shortDate(t.transactionDate)} · ` : ""}{cardLabel(t.institution, t.cardLast4)} · {kinds[t.kind].short}{original(t) ? ` · ${original(t)}` : ""}{breakdown(t) ? ` · ${breakdown(t)}` : ""}
                 </span>
             </button>
         {/snippet}
@@ -375,7 +426,7 @@ onKeys({
                 {#each days as day (day.date)}
                     <div class="flex justify-between pt-3 pb-1.5 text-[12px] tracking-[0.06em] text-mute">
                         <span>{shortDate(day.date)} {weekday(day.date)}</span>
-                        <span>{formatAmount(sum(day.items.map(t => t.amount)))}</span>
+                        <span>{formatAmount(sum(day.items.map(net)))}</span>
                     </div>
                     {#each day.items as t (t.id)}
                         {@render mobileRow(t, false)}

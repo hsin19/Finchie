@@ -11,29 +11,182 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const searchTransactions = `-- name: SearchTransactions :many
+const clearParents = `-- name: ClearParents :exec
+UPDATE transactions SET parent_id = NULL WHERE parent_id IS NOT NULL
+`
 
-SELECT t.id, t.statement_id, s.institution, t.transaction_date, t.posting_date, t.description, t.kind, t.amount,
-       t.original_amount, t.original_currency, t.country, t.card_last4
+func (q *Queries) ClearParents(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, clearParents)
+	return err
+}
+
+const kindTotals = `-- name: KindTotals :many
+SELECT t.kind,
+       count(*)::integer AS row_count,
+       sum(t.amount)::numeric AS amount
 FROM transactions t
 JOIN statements s ON s.id = t.statement_id
 WHERE ($1::date IS NULL OR t.transaction_date >= $1::date)
   AND ($2::date IS NULL OR t.transaction_date <= $2::date)
   AND ($3::date IS NULL OR s.closing_date >= $3::date)
   AND ($4::date IS NULL OR s.closing_date <= $4::date)
-  AND ($5::text[] IS NULL OR t.kind = ANY ($5::text[]))
-  AND ($6::text IS NULL OR s.institution = $6::text)
-  AND ($7::text IS NULL OR t.card_last4 = $7::text)
-  AND (NOT $8::boolean OR t.original_currency IS NOT NULL OR t.country <> 'TW')
-  AND ($9::text IS NULL OR strpos(lower(t.description), lower($9::text)) > 0)
-ORDER BY CASE WHEN $10::text = 'largest' THEN abs(t.amount) END DESC NULLS LAST,
-         CASE WHEN $10::text = 'smallest' THEN abs(t.amount) END ASC NULLS LAST,
-         CASE WHEN $10::text = 'oldest' THEN t.transaction_date END ASC NULLS LAST,
+  AND ($5::text IS NULL OR s.institution = $5::text)
+  AND ($6::text IS NULL OR t.card_last4 IS NOT DISTINCT FROM $6::text)
+  AND (NOT $7::boolean OR t.original_currency IS NOT NULL OR t.country <> 'TW')
+  AND ($8::text IS NULL OR strpos(lower(t.description), lower($8::text)) > 0)
+GROUP BY t.kind
+ORDER BY t.kind
+`
+
+type KindTotalsParams struct {
+	FromDate    pgtype.Date
+	ToDate      pgtype.Date
+	ClosingFrom pgtype.Date
+	ClosingTo   pgtype.Date
+	Institution *string
+	CardLast4   *string
+	Overseas    bool
+	Query       *string
+}
+
+type KindTotalsRow struct {
+	Kind     string
+	RowCount int32
+	Amount   pgtype.Numeric
+}
+
+// The kind facet: lines as printed, whether or not they have a parent; every filter but the kind one
+// applies.
+func (q *Queries) KindTotals(ctx context.Context, arg KindTotalsParams) ([]KindTotalsRow, error) {
+	rows, err := q.db.Query(ctx, kindTotals,
+		arg.FromDate,
+		arg.ToDate,
+		arg.ClosingFrom,
+		arg.ClosingTo,
+		arg.Institution,
+		arg.CardLast4,
+		arg.Overseas,
+		arg.Query,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []KindTotalsRow
+	for rows.Next() {
+		var i KindTotalsRow
+		if err := rows.Scan(&i.Kind, &i.RowCount, &i.Amount); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const linkLines = `-- name: LinkLines :many
+SELECT t.id, t.statement_id, s.institution, t.transaction_date, t.description, t.kind, t.amount,
+       t.original_amount, t.original_currency, t.card_last4
+FROM transactions t
+JOIN statements s ON s.id = t.statement_id
+WHERE t.kind IN ('purchase', 'foreign_transaction_fee', 'refund')
+ORDER BY t.id
+`
+
+type LinkLinesRow struct {
+	ID               int64
+	StatementID      int64
+	Institution      string
+	TransactionDate  pgtype.Date
+	Description      string
+	Kind             string
+	Amount           pgtype.Numeric
+	OriginalAmount   pgtype.Numeric
+	OriginalCurrency *string
+	CardLast4        *string
+}
+
+// The lines a link can start or end at.
+func (q *Queries) LinkLines(ctx context.Context) ([]LinkLinesRow, error) {
+	rows, err := q.db.Query(ctx, linkLines)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []LinkLinesRow
+	for rows.Next() {
+		var i LinkLinesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.StatementID,
+			&i.Institution,
+			&i.TransactionDate,
+			&i.Description,
+			&i.Kind,
+			&i.Amount,
+			&i.OriginalAmount,
+			&i.OriginalCurrency,
+			&i.CardLast4,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const lockLinks = `-- name: LockLinks :exec
+
+SELECT pg_advisory_xact_lock(4243711)
+`
+
+// Linking (internal/ingest): every link is worked out again from all the lines, under a lock so two
+// statements stored at once do not interleave.
+func (q *Queries) LockLinks(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, lockLinks)
+	return err
+}
+
+const searchTransactions = `-- name: SearchTransactions :many
+
+SELECT t.id, t.statement_id, s.institution, t.transaction_date, t.posting_date, t.description, t.kind, t.amount,
+       t.original_amount, t.original_currency, t.country, t.card_last4, t.parent_id, par.ref::jsonb AS parent, kids.list::jsonb AS children
+FROM transactions t
+JOIN statements s ON s.id = t.statement_id
+LEFT JOIN LATERAL (SELECT jsonb_build_object('id', p.id, 'statementId', p.statement_id, 'kind', p.kind,
+                                             'transactionDate', p.transaction_date, 'amount', p.amount::text) AS ref
+                   FROM transactions p
+                   WHERE p.id = t.parent_id) par ON true
+LEFT JOIN LATERAL (SELECT sum(c.amount) AS amount,
+                          jsonb_agg(jsonb_build_object('id', c.id, 'statementId', c.statement_id, 'kind', c.kind,
+                                                       'transactionDate', c.transaction_date, 'amount', c.amount::text)
+                                    ORDER BY c.transaction_date, c.id) AS list
+                   FROM transactions c
+                   WHERE $1::boolean AND c.parent_id = t.id) kids ON true
+WHERE NOT ($1::boolean AND t.parent_id IS NOT NULL)
+  AND ($2::date IS NULL OR t.transaction_date >= $2::date)
+  AND ($3::date IS NULL OR t.transaction_date <= $3::date)
+  AND ($4::date IS NULL OR s.closing_date >= $4::date)
+  AND ($5::date IS NULL OR s.closing_date <= $5::date)
+  AND ($6::text[] IS NULL OR t.kind = ANY ($6::text[]))
+  AND ($7::text IS NULL OR s.institution = $7::text)
+  AND ($8::text IS NULL OR t.card_last4 = $8::text)
+  AND (NOT $9::boolean OR t.original_currency IS NOT NULL OR t.country <> 'TW')
+  AND ($10::text IS NULL OR strpos(lower(t.description), lower($10::text)) > 0)
+ORDER BY CASE WHEN $11::text = 'largest' THEN abs(t.amount + coalesce(kids.amount, 0)) END DESC NULLS LAST,
+         CASE WHEN $11::text = 'smallest' THEN abs(t.amount + coalesce(kids.amount, 0)) END ASC NULLS LAST,
+         CASE WHEN $11::text = 'oldest' THEN t.transaction_date END ASC NULLS LAST,
          t.transaction_date DESC, t.statement_id DESC, t.line_no
-LIMIT $12 OFFSET $11
+LIMIT $13 OFFSET $12
 `
 
 type SearchTransactionsParams struct {
+	Fold        bool
 	FromDate    pgtype.Date
 	ToDate      pgtype.Date
 	ClosingFrom pgtype.Date
@@ -61,14 +214,19 @@ type SearchTransactionsRow struct {
 	OriginalCurrency *string
 	Country          *string
 	CardLast4        *string
+	ParentID         *int64
+	Parent           []byte
+	Children         []byte
 }
 
 // Search filters: a NULL argument means "no filter". SearchTransactions and TransactionTotals must
-// apply the same ones.
-// Sort: newest (the default), oldest, largest, or smallest; amounts by size, so a big payment counts as
-// large. Ties go newest first, then in statement line order.
+// apply the same ones. With @fold, a line with a parent (a linked fee or refund) is not a row of its
+// own: it is one of its parent's children, and the parent's amounts count it (ADR 0009).
+// Sort: newest (the default), oldest, largest, or smallest; amounts net of children and by size, so a
+// big payment counts as large. Ties go newest first, then in statement line order.
 func (q *Queries) SearchTransactions(ctx context.Context, arg SearchTransactionsParams) ([]SearchTransactionsRow, error) {
 	rows, err := q.db.Query(ctx, searchTransactions,
+		arg.Fold,
 		arg.FromDate,
 		arg.ToDate,
 		arg.ClosingFrom,
@@ -102,6 +260,101 @@ func (q *Queries) SearchTransactions(ctx context.Context, arg SearchTransactions
 			&i.OriginalCurrency,
 			&i.Country,
 			&i.CardLast4,
+			&i.ParentID,
+			&i.Parent,
+			&i.Children,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const setParents = `-- name: SetParents :exec
+UPDATE transactions t SET parent_id = l.parent_id
+FROM (SELECT unnest($1::bigint[]) AS id, unnest($2::bigint[]) AS parent_id) l
+WHERE t.id = l.id
+`
+
+type SetParentsParams struct {
+	Ids       []int64
+	ParentIds []int64
+}
+
+func (q *Queries) SetParents(ctx context.Context, arg SetParentsParams) error {
+	_, err := q.db.Exec(ctx, setParents, arg.Ids, arg.ParentIds)
+	return err
+}
+
+const transactionFamily = `-- name: TransactionFamily :many
+SELECT t.id, t.statement_id, s.institution, t.transaction_date, t.posting_date, t.description, t.kind, t.amount,
+       t.original_amount, t.original_currency, t.country, t.card_last4, t.parent_id, par.ref::jsonb AS parent, kids.list::jsonb AS children
+FROM transactions t
+JOIN statements s ON s.id = t.statement_id
+LEFT JOIN LATERAL (SELECT jsonb_build_object('id', p.id, 'statementId', p.statement_id, 'kind', p.kind,
+                                             'transactionDate', p.transaction_date, 'amount', p.amount::text) AS ref
+                   FROM transactions p
+                   WHERE p.id = t.parent_id) par ON true
+LEFT JOIN LATERAL (SELECT jsonb_agg(jsonb_build_object('id', c.id, 'statementId', c.statement_id, 'kind', c.kind,
+                                                       'transactionDate', c.transaction_date, 'amount', c.amount::text)
+                                    ORDER BY c.transaction_date, c.id) AS list
+                   FROM transactions c
+                   WHERE c.parent_id = t.id) kids ON true
+WHERE t.id = $1
+   OR t.id = (SELECT p.parent_id FROM transactions p WHERE p.id = $1)
+   OR t.parent_id = $1
+ORDER BY t.transaction_date, t.id
+`
+
+type TransactionFamilyRow struct {
+	ID               int64
+	StatementID      int64
+	Institution      string
+	TransactionDate  pgtype.Date
+	PostingDate      pgtype.Date
+	Description      string
+	Kind             string
+	Amount           pgtype.Numeric
+	OriginalAmount   pgtype.Numeric
+	OriginalCurrency *string
+	Country          *string
+	CardLast4        *string
+	ParentID         *int64
+	Parent           []byte
+	Children         []byte
+}
+
+// A line with its parent and its children, whichever statements they are on; the same columns as
+// ListTransactions.
+func (q *Queries) TransactionFamily(ctx context.Context, id int64) ([]TransactionFamilyRow, error) {
+	rows, err := q.db.Query(ctx, transactionFamily, id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []TransactionFamilyRow
+	for rows.Next() {
+		var i TransactionFamilyRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.StatementID,
+			&i.Institution,
+			&i.TransactionDate,
+			&i.PostingDate,
+			&i.Description,
+			&i.Kind,
+			&i.Amount,
+			&i.OriginalAmount,
+			&i.OriginalCurrency,
+			&i.Country,
+			&i.CardLast4,
+			&i.ParentID,
+			&i.Parent,
+			&i.Children,
 		); err != nil {
 			return nil, err
 		}
@@ -122,15 +375,19 @@ SELECT t.kind,
            -- IS NOT DISTINCT FROM: rows without a card (payments) must give false, not NULL.
            AND ($3::text IS NULL OR t.card_last4 IS NOT DISTINCT FROM $3::text))::boolean AS card_match,
        count(*)::integer AS row_count,
-       sum(t.amount)::numeric AS amount
+       sum(t.amount + coalesce(kids.amount, 0))::numeric AS amount
 FROM transactions t
 JOIN statements s ON s.id = t.statement_id
-WHERE ($4::date IS NULL OR t.transaction_date >= $4::date)
-  AND ($5::date IS NULL OR t.transaction_date <= $5::date)
-  AND ($6::date IS NULL OR s.closing_date >= $6::date)
-  AND ($7::date IS NULL OR s.closing_date <= $7::date)
-  AND (NOT $8::boolean OR t.original_currency IS NOT NULL OR t.country <> 'TW')
-  AND ($9::text IS NULL OR strpos(lower(t.description), lower($9::text)) > 0)
+LEFT JOIN LATERAL (SELECT sum(c.amount) AS amount
+                   FROM transactions c
+                   WHERE $4::boolean AND c.parent_id = t.id) kids ON true
+WHERE NOT ($4::boolean AND t.parent_id IS NOT NULL)
+  AND ($5::date IS NULL OR t.transaction_date >= $5::date)
+  AND ($6::date IS NULL OR t.transaction_date <= $6::date)
+  AND ($7::date IS NULL OR s.closing_date >= $7::date)
+  AND ($8::date IS NULL OR s.closing_date <= $8::date)
+  AND (NOT $9::boolean OR t.original_currency IS NOT NULL OR t.country <> 'TW')
+  AND ($10::text IS NULL OR strpos(lower(t.description), lower($10::text)) > 0)
 GROUP BY t.kind, s.institution, t.card_last4
 ORDER BY t.kind, s.institution, t.card_last4
 `
@@ -139,6 +396,7 @@ type TransactionTotalsParams struct {
 	Kinds       []string
 	Institution *string
 	CardLast4   *string
+	Fold        bool
 	FromDate    pgtype.Date
 	ToDate      pgtype.Date
 	ClosingFrom pgtype.Date
@@ -157,13 +415,15 @@ type TransactionTotalsRow struct {
 	Amount      pgtype.Numeric
 }
 
-// One row per (kind, card) with flags for whether that group passes the kind and card filters, so
-// the caller can build the full total and both facets from a single scan.
+// The rows SearchTransactions lists, one group per (kind, card) with flags for whether the group
+// passes the kind and card filters, so the caller can build the full total and the card facet from a
+// single scan. Amounts are net of children.
 func (q *Queries) TransactionTotals(ctx context.Context, arg TransactionTotalsParams) ([]TransactionTotalsRow, error) {
 	rows, err := q.db.Query(ctx, transactionTotals,
 		arg.Kinds,
 		arg.Institution,
 		arg.CardLast4,
+		arg.Fold,
 		arg.FromDate,
 		arg.ToDate,
 		arg.ClosingFrom,

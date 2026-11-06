@@ -201,26 +201,51 @@ type Transaction struct {
 	// Amount Decimal number as a string, e.g. "-6552.97"
 	//
 	// Example: 1234.50
-	Amount      Decimal         `json:"amount"`
-	CardLast4   *string         `json:"cardLast4,omitempty"`
-	Country     *string         `json:"country,omitempty"`
-	Description string          `json:"description"`
-	Id          int64           `json:"id"`
-	Institution string          `json:"institution"`
-	Kind        TransactionKind `json:"kind"`
+	Amount    Decimal `json:"amount"`
+	CardLast4 *string `json:"cardLast4,omitempty"`
+
+	// Children Lines that adjust this one, possibly on other statements; absent without any
+	Children    *[]TransactionLink `json:"children,omitempty"`
+	Country     *string            `json:"country,omitempty"`
+	Description string             `json:"description"`
+	Id          int64              `json:"id"`
+	Institution string             `json:"institution"`
+	Kind        TransactionKind    `json:"kind"`
 
 	// OriginalAmount Decimal number as a string, e.g. "-6552.97"
 	//
 	// Example: 1234.50
-	OriginalAmount   *Decimal            `json:"originalAmount,omitempty"`
-	OriginalCurrency *string             `json:"originalCurrency,omitempty"`
-	PostingDate      *openapi_types.Date `json:"postingDate,omitempty"`
-	StatementId      int64               `json:"statementId"`
-	TransactionDate  openapi_types.Date  `json:"transactionDate"`
+	OriginalAmount   *Decimal `json:"originalAmount,omitempty"`
+	OriginalCurrency *string  `json:"originalCurrency,omitempty"`
+
+	// Parent Another line, in short, enough to find it
+	Parent          *TransactionLink    `json:"parent,omitempty"`
+	PostingDate     *openapi_types.Date `json:"postingDate,omitempty"`
+	StatementId     int64               `json:"statementId"`
+	TransactionDate openapi_types.Date  `json:"transactionDate"`
+}
+
+// TransactionFamily defines model for TransactionFamily.
+type TransactionFamily struct {
+	Children    []Transaction `json:"children"`
+	Parent      *Transaction  `json:"parent,omitempty"`
+	Transaction Transaction   `json:"transaction"`
 }
 
 // TransactionKind defines model for TransactionKind.
 type TransactionKind string
+
+// TransactionLink Another line, in short, enough to find it
+type TransactionLink struct {
+	// Amount Decimal number as a string, e.g. "-6552.97"
+	//
+	// Example: 1234.50
+	Amount          Decimal            `json:"amount"`
+	Id              int64              `json:"id"`
+	Kind            TransactionKind    `json:"kind"`
+	StatementId     int64              `json:"statementId"`
+	TransactionDate openapi_types.Date `json:"transactionDate"`
+}
 
 // TransactionSearch defines model for TransactionSearch.
 type TransactionSearch struct {
@@ -326,6 +351,9 @@ type ServerInterface interface {
 	// SearchTransactions Transactions across every statement, newest first, with totals for the whole match
 	// (GET /api/transactions)
 	SearchTransactions(ctx *echo.Context, params SearchTransactionsParams) error
+	// GetTransaction A transaction with its parent and children, whichever statements they are on
+	// (GET /api/transactions/{id})
+	GetTransaction(ctx *echo.Context, id Id) error
 }
 
 // ServerInterfaceWrapper converts echo contexts to parameters.
@@ -553,6 +581,22 @@ func (w *ServerInterfaceWrapper) SearchTransactions(ctx *echo.Context) error {
 	return err
 }
 
+// GetTransaction converts echo context to params.
+func (w *ServerInterfaceWrapper) GetTransaction(ctx *echo.Context) error {
+	var err error
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", ctx.Param("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: ctx.Request().URL.RawPath == ""})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter id: %s", err))
+	}
+
+	// Invoke the callback with all the unmarshaled arguments
+	err = w.Handler.GetTransaction(ctx, id)
+	return err
+}
+
 // This is a simple interface which specifies echo.Route addition functions which
 // are present on both echo.Echo and echo.Group, since we want to allow using
 // either of them for path registration
@@ -607,6 +651,7 @@ func RegisterHandlersWithOptions(router EchoRouter, si ServerInterface, options 
 	router.GET(options.BaseURL+"/api/documents/:id/content", wrapper.GetDocumentContent, options.OperationMiddlewares["getDocumentContent"]...)
 	router.GET(options.BaseURL+"/api/statements", wrapper.ListStatements, options.OperationMiddlewares["listStatements"]...)
 	router.GET(options.BaseURL+"/api/statements/:id", wrapper.GetStatement, options.OperationMiddlewares["getStatement"]...)
+	router.GET(options.BaseURL+"/api/transactions/:id", wrapper.GetTransaction, options.OperationMiddlewares["getTransaction"]...)
 	router.GET(options.BaseURL+"/api/statements/:id/transactions", wrapper.ListStatementTransactions, options.OperationMiddlewares["listStatementTransactions"]...)
 	router.GET(options.BaseURL+"/api/transactions", wrapper.SearchTransactions, options.OperationMiddlewares["searchTransactions"]...)
 
@@ -943,6 +988,42 @@ func (response SearchTransactions200JSONResponse) VisitSearchTransactionsRespons
 	return err
 }
 
+type GetTransactionRequestObject struct {
+	Id Id `json:"id"`
+}
+
+type GetTransactionResponseObject interface {
+	VisitGetTransactionResponse(w http.ResponseWriter) error
+}
+
+type GetTransaction200JSONResponse TransactionFamily
+
+func (response GetTransaction200JSONResponse) VisitGetTransactionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTransaction404JSONResponse struct{ ProblemJSONResponse }
+
+func (response GetTransaction404JSONResponse) VisitGetTransactionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 	// ListDocuments Uploaded documents, newest first
@@ -972,6 +1053,9 @@ type StrictServerInterface interface {
 	// SearchTransactions Transactions across every statement, newest first, with totals for the whole match
 	// (GET /api/transactions)
 	SearchTransactions(ctx context.Context, request SearchTransactionsRequestObject) (SearchTransactionsResponseObject, error)
+	// GetTransaction A transaction with its parent and children, whichever statements they are on
+	// (GET /api/transactions/{id})
+	GetTransaction(ctx context.Context, request GetTransactionRequestObject) (GetTransactionResponseObject, error)
 }
 
 type StrictHandlerFunc func(ctx *echo.Context, request any) (any, error)
@@ -1209,6 +1293,31 @@ func (sh *strictHandler) SearchTransactions(ctx *echo.Context, params SearchTran
 		return err
 	} else if validResponse, ok := response.(SearchTransactionsResponseObject); ok {
 		return validResponse.VisitSearchTransactionsResponse(ctx.Response())
+	} else if response != nil {
+		return fmt.Errorf("unexpected response type: %T", response)
+	}
+	return nil
+}
+
+// GetTransaction operation middleware
+func (sh *strictHandler) GetTransaction(ctx *echo.Context, id Id) error {
+	var request GetTransactionRequestObject
+
+	request.Id = id
+
+	handler := func(ctx *echo.Context, request interface{}) (interface{}, error) {
+		return sh.ssi.GetTransaction(ctx.Request().Context(), request.(GetTransactionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetTransaction")
+	}
+
+	response, err := handler(ctx, request)
+
+	if err != nil {
+		return err
+	} else if validResponse, ok := response.(GetTransactionResponseObject); ok {
+		return validResponse.VisitGetTransactionResponse(ctx.Response())
 	} else if response != nil {
 		return fmt.Errorf("unexpected response type: %T", response)
 	}

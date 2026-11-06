@@ -109,6 +109,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/transactions/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A transaction with its parent and children, whichever statements they are on */
+        get: operations["getTransaction"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/statements/{id}/transactions": {
         parameters: {
             query?: never;
@@ -137,6 +154,11 @@ export interface paths {
          * @description Filters combine with AND. `total` and `sum` cover every matching row, not just this page.
          *     `byKind` and `byCard` are facets: each ignores its own filter (byKind ignores `kind`, byCard
          *     ignores `institution` and `card`), so a picker can show the options it would switch to.
+         *
+         *     While `kind` includes purchases (or is not given), a line with a parent (a fee or refund
+         *     linked to its purchase) is not a row of its own but one of the parent's `children`, and rows,
+         *     `sum`, `byCard`, and the amount sorts count it there: amounts are net of children. `byKind`
+         *     counts the lines as printed either way.
          */
         get: operations["searchTransactions"];
         put?: never;
@@ -228,6 +250,26 @@ export interface components {
             originalCurrency?: string;
             country?: string;
             cardLast4?: string;
+            /** @description The line this one adjusts, such as the purchase a fee or refund belongs to */
+            parent?: components["schemas"]["TransactionLink"];
+            /** @description Lines that adjust this one, possibly on other statements; absent without any */
+            children?: components["schemas"]["TransactionLink"][];
+        };
+        /** @description Another line, in short, enough to find it */
+        TransactionLink: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            statementId: number;
+            kind: components["schemas"]["TransactionKind"];
+            /** Format: date */
+            transactionDate: string;
+            amount: components["schemas"]["Decimal"];
+        };
+        TransactionFamily: {
+            transaction: components["schemas"]["Transaction"];
+            parent?: components["schemas"]["Transaction"];
+            children: components["schemas"]["Transaction"][];
         };
         TransactionSearch: {
             items: components["schemas"]["Transaction"][];
@@ -445,6 +487,29 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Statement"];
+                };
+            };
+            404: components["responses"]["Problem"];
+        };
+    };
+    getTransaction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The transaction and the lines linked to it */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransactionFamily"];
                 };
             };
             404: components["responses"]["Problem"];

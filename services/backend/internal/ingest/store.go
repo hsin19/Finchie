@@ -68,7 +68,12 @@ func Store(ctx context.Context, pool *pgxpool.Pool, documentID int64, response *
 			// Another document already holds this statement (an e-mail and its bare PDF).
 			reason := fmt.Sprintf("same statement as document %d", existing.DocumentID)
 			finish.Status, finish.Error, outcome = StatusDuplicate, &reason, StatusDuplicate
-			return queries.FinishDocument(ctx, finish)
+			if err := queries.FinishDocument(ctx, finish); err != nil {
+				return err
+			}
+			// A statement this document had before may have been a parent's.
+			_, err := relink(ctx, queries)
+			return err
 		case !errors.Is(err, pgx.ErrNoRows):
 			return err
 		}
@@ -81,6 +86,10 @@ func Store(ctx context.Context, pool *pgxpool.Pool, documentID int64, response *
 			transactions[i].StatementID = statementID
 		}
 		if _, err := queries.InsertTransactions(ctx, transactions); err != nil {
+			return err
+		}
+		// Its lines may be parents or children of lines on other statements.
+		if _, err := relink(ctx, queries); err != nil {
 			return err
 		}
 

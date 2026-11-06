@@ -199,9 +199,18 @@ func (q *Queries) ListStatements(ctx context.Context, rowLimit int32) ([]ListSta
 
 const listTransactions = `-- name: ListTransactions :many
 SELECT t.id, t.statement_id, s.institution, t.transaction_date, t.posting_date, t.description, t.kind, t.amount,
-       t.original_amount, t.original_currency, t.country, t.card_last4
+       t.original_amount, t.original_currency, t.country, t.card_last4, t.parent_id, par.ref::jsonb AS parent, kids.list::jsonb AS children
 FROM transactions t
 JOIN statements s ON s.id = t.statement_id
+LEFT JOIN LATERAL (SELECT jsonb_build_object('id', p.id, 'statementId', p.statement_id, 'kind', p.kind,
+                                             'transactionDate', p.transaction_date, 'amount', p.amount::text) AS ref
+                   FROM transactions p
+                   WHERE p.id = t.parent_id) par ON true
+LEFT JOIN LATERAL (SELECT jsonb_agg(jsonb_build_object('id', c.id, 'statementId', c.statement_id, 'kind', c.kind,
+                                                       'transactionDate', c.transaction_date, 'amount', c.amount::text)
+                                    ORDER BY c.transaction_date, c.id) AS list
+                   FROM transactions c
+                   WHERE c.parent_id = t.id) kids ON true
 WHERE t.statement_id = $1
 ORDER BY t.line_no
 `
@@ -219,8 +228,13 @@ type ListTransactionsRow struct {
 	OriginalCurrency *string
 	Country          *string
 	CardLast4        *string
+	ParentID         *int64
+	Parent           []byte
+	Children         []byte
 }
 
+// The lines as printed, each with its parent (parent_id) and its children, which may be on other
+// statements.
 func (q *Queries) ListTransactions(ctx context.Context, statementID int64) ([]ListTransactionsRow, error) {
 	rows, err := q.db.Query(ctx, listTransactions, statementID)
 	if err != nil {
@@ -243,6 +257,9 @@ func (q *Queries) ListTransactions(ctx context.Context, statementID int64) ([]Li
 			&i.OriginalCurrency,
 			&i.Country,
 			&i.CardLast4,
+			&i.ParentID,
+			&i.Parent,
+			&i.Children,
 		); err != nil {
 			return nil, err
 		}

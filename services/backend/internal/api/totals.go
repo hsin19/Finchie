@@ -20,12 +20,10 @@ func (t *tally) add(count int32, amount pgtype.Numeric) {
 	t.amount = addNumeric(t.amount, amount)
 }
 
-// summarize folds the (kind, card) groups from TransactionTotals into the search total and the two
-// facets. Each facet skips its own filter: byKind keeps groups that pass the card filter, byCard keeps
-// groups that pass the kind filter.
-func summarize(groups []dbq.TransactionTotalsRow) (tally, []KindTotal, []CardTotal) {
+// summarize folds the (kind, card) groups from TransactionTotals into the search total and the card
+// facet, which skips the card filter: it keeps the groups that pass the kind filter.
+func summarize(groups []dbq.TransactionTotalsRow) (tally, []CardTotal) {
 	total := tally{amount: zero()}
-	kinds := map[string]*tally{}
 	type cardKey struct{ institution, last4 string }
 	cards := map[cardKey]*tally{}
 	var cardOrder []cardKey
@@ -33,12 +31,6 @@ func summarize(groups []dbq.TransactionTotalsRow) (tally, []KindTotal, []CardTot
 	for _, g := range groups {
 		if g.KindMatch && g.CardMatch {
 			total.add(g.RowCount, g.Amount)
-		}
-		if g.CardMatch {
-			if kinds[g.Kind] == nil {
-				kinds[g.Kind] = &tally{amount: zero()}
-			}
-			kinds[g.Kind].add(g.RowCount, g.Amount)
 		}
 		if g.KindMatch {
 			key := cardKey{institution: g.Institution}
@@ -52,12 +44,6 @@ func summarize(groups []dbq.TransactionTotalsRow) (tally, []KindTotal, []CardTot
 			cards[key].add(g.RowCount, g.Amount)
 		}
 	}
-
-	byKind := make([]KindTotal, 0, len(kinds))
-	for kind, t := range kinds {
-		byKind = append(byKind, KindTotal{Kind: TransactionKind(kind), Count: t.count, Amount: decimalString(t.amount)})
-	}
-	slices.SortFunc(byKind, func(a, b KindTotal) int { return strings.Compare(string(a.Kind), string(b.Kind)) })
 
 	slices.SortFunc(cardOrder, func(a, b cardKey) int {
 		if c := strings.Compare(a.institution, b.institution); c != 0 {
@@ -74,7 +60,16 @@ func summarize(groups []dbq.TransactionTotalsRow) (tally, []KindTotal, []CardTot
 		}
 		byCard = append(byCard, card)
 	}
-	return total, byKind, byCard
+	return total, byCard
+}
+
+// kindTotals is the kind facet, from KindTotals (already in kind order).
+func kindTotals(rows []dbq.KindTotalsRow) []KindTotal {
+	byKind := make([]KindTotal, 0, len(rows))
+	for _, row := range rows {
+		byKind = append(byKind, KindTotal{Kind: TransactionKind(row.Kind), Count: int(row.RowCount), Amount: decimalString(row.Amount)})
+	}
+	return byKind
 }
 
 func zero() pgtype.Numeric {
