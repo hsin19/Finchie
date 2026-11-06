@@ -16,7 +16,8 @@ Defined spec-first in [`api/openapi.yaml`](api/openapi.yaml); `oapi-codegen` gen
 | `GET` | `/api/statements` | Newest closing date first, with each statement's transaction count |
 | `GET` | `/api/statements/{id}` | One statement |
 | `GET` | `/api/statements/{id}/transactions` | In statement order |
-| `GET` | `/api/transactions` | Across all statements, newest first. Filters: `from`, `to`, `kind` (repeatable), `institution`, `card`, `overseas`, `q`; `limit` 0–500 and `offset`. Returns the page plus `total` and `sum` for the whole match, and `byKind` / `byCard` facets that each ignore their own filter |
+| `GET` | `/api/transactions` | Across all statements. Filters: `from`, `to` (transaction date), `closingFrom`, `closingTo` (the statement's closing date), `kind` (repeatable), `institution`, `card`, `overseas`, `q`; `sort` (`newest`, `oldest`, `largest`, `smallest`); `limit` 0–500 and `offset`. Returns the page plus `total` and `sum` for the whole match, and `byKind` / `byCard` facets that each ignore their own filter. While purchases are included, fees and refunds linked to a purchase fold into it as its `children` and amounts are net of them ([ADR 0009](../../docs/adr/0009-transaction-parents.md)) |
+| `GET` | `/api/transactions/{id}` | One transaction with its parent and children, whichever statements they are on |
 | `GET` | `/healthz` | `200` when the database answers |
 | `GET` | anything else | The web app: a file from the embedded build, or its `200.html` shell for client-side routes. Unknown `/api/` paths stay `404` |
 

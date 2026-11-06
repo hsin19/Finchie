@@ -13,8 +13,11 @@ export type DocumentStatus = Schemas["DocumentStatus"];
 export type KindTotal = Schemas["KindTotal"];
 export type Statement = Schemas["Statement"];
 export type Transaction = Schemas["Transaction"];
+export type TransactionFamily = Schemas["TransactionFamily"];
 export type TransactionKind = Schemas["TransactionKind"];
+export type TransactionLink = Schemas["TransactionLink"];
 export type TransactionSearch = Schemas["TransactionSearch"];
+export type TransactionSort = Schemas["TransactionSort"];
 export type TransactionQuery = NonNullable<paths["/api/transactions"]["get"]["parameters"]["query"]>;
 
 /** Dependency of the layout load: invalidate it after an upload or re-parse. */

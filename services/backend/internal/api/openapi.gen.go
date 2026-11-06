@@ -75,6 +75,30 @@ func (e TransactionKind) Valid() bool {
 	}
 }
 
+// Defines values for TransactionSort.
+const (
+	Largest  TransactionSort = "largest"
+	Newest   TransactionSort = "newest"
+	Oldest   TransactionSort = "oldest"
+	Smallest TransactionSort = "smallest"
+)
+
+// Valid indicates whether the value is a known member of the TransactionSort enum.
+func (e TransactionSort) Valid() bool {
+	switch e {
+	case Largest:
+		return true
+	case Newest:
+		return true
+	case Oldest:
+		return true
+	case Smallest:
+		return true
+	default:
+		return false
+	}
+}
+
 // CardTotal defines model for CardTotal.
 type CardTotal struct {
 	// Amount Decimal number as a string, e.g. "-6552.97"
@@ -177,26 +201,57 @@ type Transaction struct {
 	// Amount Decimal number as a string, e.g. "-6552.97"
 	//
 	// Example: 1234.50
-	Amount      Decimal         `json:"amount"`
-	CardLast4   *string         `json:"cardLast4,omitempty"`
-	Country     *string         `json:"country,omitempty"`
-	Description string          `json:"description"`
-	Id          int64           `json:"id"`
-	Institution string          `json:"institution"`
-	Kind        TransactionKind `json:"kind"`
+	Amount    Decimal `json:"amount"`
+	CardLast4 *string `json:"cardLast4,omitempty"`
+
+	// Children Lines that adjust this one, possibly on other statements; absent without any
+	Children    *[]TransactionLink `json:"children,omitempty"`
+	Country     *string            `json:"country,omitempty"`
+	Description string             `json:"description"`
+	Id          int64              `json:"id"`
+	Institution string             `json:"institution"`
+	Kind        TransactionKind    `json:"kind"`
 
 	// OriginalAmount Decimal number as a string, e.g. "-6552.97"
 	//
 	// Example: 1234.50
-	OriginalAmount   *Decimal            `json:"originalAmount,omitempty"`
-	OriginalCurrency *string             `json:"originalCurrency,omitempty"`
-	PostingDate      *openapi_types.Date `json:"postingDate,omitempty"`
-	StatementId      int64               `json:"statementId"`
-	TransactionDate  openapi_types.Date  `json:"transactionDate"`
+	OriginalAmount   *Decimal `json:"originalAmount,omitempty"`
+	OriginalCurrency *string  `json:"originalCurrency,omitempty"`
+
+	// Parent Another line, in short, enough to find it and to tell a refund in full
+	Parent          *TransactionLink    `json:"parent,omitempty"`
+	PostingDate     *openapi_types.Date `json:"postingDate,omitempty"`
+	StatementId     int64               `json:"statementId"`
+	TransactionDate openapi_types.Date  `json:"transactionDate"`
+}
+
+// TransactionFamily defines model for TransactionFamily.
+type TransactionFamily struct {
+	Children    []Transaction `json:"children"`
+	Parent      *Transaction  `json:"parent,omitempty"`
+	Transaction Transaction   `json:"transaction"`
 }
 
 // TransactionKind defines model for TransactionKind.
 type TransactionKind string
+
+// TransactionLink Another line, in short, enough to find it and to tell a refund in full
+type TransactionLink struct {
+	// Amount Decimal number as a string, e.g. "-6552.97"
+	//
+	// Example: 1234.50
+	Amount Decimal         `json:"amount"`
+	Id     int64           `json:"id"`
+	Kind   TransactionKind `json:"kind"`
+
+	// OriginalAmount Decimal number as a string, e.g. "-6552.97"
+	//
+	// Example: 1234.50
+	OriginalAmount   *Decimal           `json:"originalAmount,omitempty"`
+	OriginalCurrency *string            `json:"originalCurrency,omitempty"`
+	StatementId      int64              `json:"statementId"`
+	TransactionDate  openapi_types.Date `json:"transactionDate"`
+}
 
 // TransactionSearch defines model for TransactionSearch.
 type TransactionSearch struct {
@@ -212,6 +267,9 @@ type TransactionSearch struct {
 	// Total Rows matching every filter
 	Total int `json:"total"`
 }
+
+// TransactionSort defines model for TransactionSort.
+type TransactionSort string
 
 // Id defines model for Id.
 type Id = int64
@@ -240,7 +298,13 @@ type SearchTransactionsParams struct {
 	From *openapi_types.Date `form:"from,omitempty" json:"from,omitempty"`
 
 	// To Last transaction date, inclusive
-	To          *openapi_types.Date `form:"to,omitempty" json:"to,omitempty"`
+	To *openapi_types.Date `form:"to,omitempty" json:"to,omitempty"`
+
+	// ClosingFrom First closing date of the transaction's statement, inclusive
+	ClosingFrom *openapi_types.Date `form:"closingFrom,omitempty" json:"closingFrom,omitempty"`
+
+	// ClosingTo Last closing date of the transaction's statement, inclusive
+	ClosingTo   *openapi_types.Date `form:"closingTo,omitempty" json:"closingTo,omitempty"`
 	Kind        *[]TransactionKind  `form:"kind,omitempty" json:"kind,omitempty"`
 	Institution *string             `form:"institution,omitempty" json:"institution,omitempty"`
 
@@ -252,6 +316,9 @@ type SearchTransactionsParams struct {
 
 	// Q Case-insensitive substring of the description
 	Q *string `form:"q,omitempty" json:"q,omitempty"`
+
+	// Sort Row order; largest and smallest compare amounts by size, ignoring the sign
+	Sort *TransactionSort `form:"sort,omitempty" json:"sort,omitempty"`
 
 	// Limit Page size; 0 returns only the totals
 	Limit  *int `form:"limit,omitempty" json:"limit,omitempty"`
@@ -290,6 +357,9 @@ type ServerInterface interface {
 	// SearchTransactions Transactions across every statement, newest first, with totals for the whole match
 	// (GET /api/transactions)
 	SearchTransactions(ctx *echo.Context, params SearchTransactionsParams) error
+	// GetTransaction A transaction with its parent and children, whichever statements they are on
+	// (GET /api/transactions/{id})
+	GetTransaction(ctx *echo.Context, id Id) error
 }
 
 // ServerInterfaceWrapper converts echo contexts to parameters.
@@ -442,6 +512,20 @@ func (w *ServerInterfaceWrapper) SearchTransactions(ctx *echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter to: %s", err))
 	}
 
+	// ------------- Optional query parameter "closingFrom" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "closingFrom", ctx.QueryParams(), &params.ClosingFrom, runtime.BindQueryParameterOptions{Type: "string", Format: "date"})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter closingFrom: %s", err))
+	}
+
+	// ------------- Optional query parameter "closingTo" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "closingTo", ctx.QueryParams(), &params.ClosingTo, runtime.BindQueryParameterOptions{Type: "string", Format: "date"})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter closingTo: %s", err))
+	}
+
 	// ------------- Optional query parameter "kind" -------------
 
 	err = runtime.BindQueryParameterWithOptions("form", true, false, "kind", ctx.QueryParams(), &params.Kind, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
@@ -477,6 +561,13 @@ func (w *ServerInterfaceWrapper) SearchTransactions(ctx *echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter q: %s", err))
 	}
 
+	// ------------- Optional query parameter "sort" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "sort", ctx.QueryParams(), &params.Sort, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter sort: %s", err))
+	}
+
 	// ------------- Optional query parameter "limit" -------------
 
 	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", ctx.QueryParams(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
@@ -493,6 +584,22 @@ func (w *ServerInterfaceWrapper) SearchTransactions(ctx *echo.Context) error {
 
 	// Invoke the callback with all the unmarshaled arguments
 	err = w.Handler.SearchTransactions(ctx, params)
+	return err
+}
+
+// GetTransaction converts echo context to params.
+func (w *ServerInterfaceWrapper) GetTransaction(ctx *echo.Context) error {
+	var err error
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", ctx.Param("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: ctx.Request().URL.RawPath == ""})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter id: %s", err))
+	}
+
+	// Invoke the callback with all the unmarshaled arguments
+	err = w.Handler.GetTransaction(ctx, id)
 	return err
 }
 
@@ -550,6 +657,7 @@ func RegisterHandlersWithOptions(router EchoRouter, si ServerInterface, options 
 	router.GET(options.BaseURL+"/api/documents/:id/content", wrapper.GetDocumentContent, options.OperationMiddlewares["getDocumentContent"]...)
 	router.GET(options.BaseURL+"/api/statements", wrapper.ListStatements, options.OperationMiddlewares["listStatements"]...)
 	router.GET(options.BaseURL+"/api/statements/:id", wrapper.GetStatement, options.OperationMiddlewares["getStatement"]...)
+	router.GET(options.BaseURL+"/api/transactions/:id", wrapper.GetTransaction, options.OperationMiddlewares["getTransaction"]...)
 	router.GET(options.BaseURL+"/api/statements/:id/transactions", wrapper.ListStatementTransactions, options.OperationMiddlewares["listStatementTransactions"]...)
 	router.GET(options.BaseURL+"/api/transactions", wrapper.SearchTransactions, options.OperationMiddlewares["searchTransactions"]...)
 
@@ -886,6 +994,42 @@ func (response SearchTransactions200JSONResponse) VisitSearchTransactionsRespons
 	return err
 }
 
+type GetTransactionRequestObject struct {
+	Id Id `json:"id"`
+}
+
+type GetTransactionResponseObject interface {
+	VisitGetTransactionResponse(w http.ResponseWriter) error
+}
+
+type GetTransaction200JSONResponse TransactionFamily
+
+func (response GetTransaction200JSONResponse) VisitGetTransactionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTransaction404JSONResponse struct{ ProblemJSONResponse }
+
+func (response GetTransaction404JSONResponse) VisitGetTransactionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 	// ListDocuments Uploaded documents, newest first
@@ -915,6 +1059,9 @@ type StrictServerInterface interface {
 	// SearchTransactions Transactions across every statement, newest first, with totals for the whole match
 	// (GET /api/transactions)
 	SearchTransactions(ctx context.Context, request SearchTransactionsRequestObject) (SearchTransactionsResponseObject, error)
+	// GetTransaction A transaction with its parent and children, whichever statements they are on
+	// (GET /api/transactions/{id})
+	GetTransaction(ctx context.Context, request GetTransactionRequestObject) (GetTransactionResponseObject, error)
 }
 
 type StrictHandlerFunc func(ctx *echo.Context, request any) (any, error)
@@ -1152,6 +1299,31 @@ func (sh *strictHandler) SearchTransactions(ctx *echo.Context, params SearchTran
 		return err
 	} else if validResponse, ok := response.(SearchTransactionsResponseObject); ok {
 		return validResponse.VisitSearchTransactionsResponse(ctx.Response())
+	} else if response != nil {
+		return fmt.Errorf("unexpected response type: %T", response)
+	}
+	return nil
+}
+
+// GetTransaction operation middleware
+func (sh *strictHandler) GetTransaction(ctx *echo.Context, id Id) error {
+	var request GetTransactionRequestObject
+
+	request.Id = id
+
+	handler := func(ctx *echo.Context, request interface{}) (interface{}, error) {
+		return sh.ssi.GetTransaction(ctx.Request().Context(), request.(GetTransactionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetTransaction")
+	}
+
+	response, err := handler(ctx, request)
+
+	if err != nil {
+		return err
+	} else if validResponse, ok := response.(GetTransactionResponseObject); ok {
+		return validResponse.VisitGetTransactionResponse(ctx.Response())
 	} else if response != nil {
 		return fmt.Errorf("unexpected response type: %T", response)
 	}

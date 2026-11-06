@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/hsin19/finchie/services/backend/internal/db/dbq"
+	"github.com/hsin19/finchie/services/backend/internal/ingest"
 )
 
 type line struct {
@@ -87,6 +88,10 @@ func seedLedger(t *testing.T, pool *pgxpool.Pool) (hsbc int64) {
 		{"2026-10-02", "Uber Eats", "purchase", "289", "", "TW", "3381"},
 		{"2026-10-07", "U Bear cashback", "rebate", "-35.5", "", "", "3381"},
 	})
+	// The fee (1.5% of 23104) becomes the leather purchase's child; the tax-free refund fits none.
+	if _, err := ingest.Relink(t.Context(), pool); err != nil {
+		t.Fatal(err)
+	}
 	return hsbc
 }
 
@@ -94,19 +99,31 @@ func TestSearchTransactionsFiltersAndTotals(t *testing.T) {
 	e, pool := newAPI(t, 1<<20)
 	seedLedger(t, pool)
 
+	// The fee is folded into the leather purchase: one row fewer, the same sum.
 	all := decode[TransactionSearch](t, get(t, e, "/api/transactions?from=2026-10-01&to=2026-10-31"))
-	if all.Total != 5 || len(all.Items) != 5 || all.Sum != "21524.06" {
+	if all.Total != 4 || len(all.Items) != 4 || all.Sum != "21524.06" {
 		t.Fatalf("October: total=%d items=%d sum=%s", all.Total, len(all.Items), all.Sum)
 	}
-	if first := all.Items[0]; first.Description != "Leather Atelier Firenze" || first.Institution != "hsbc" {
-		t.Fatalf("newest first, then statement line order: %+v", first)
+	leather := all.Items[0]
+	if leather.Description != "Leather Atelier Firenze" || leather.Institution != "hsbc" || leather.Amount != "23104" {
+		t.Fatalf("newest first, then statement line order: %+v", leather)
+	}
+	if leather.Children == nil || len(*leather.Children) != 1 || (*leather.Children)[0].Kind != ForeignTransactionFee || (*leather.Children)[0].Amount != "346.56" {
+		t.Fatalf("leather children = %+v", leather.Children)
 	}
 
-	purchases := decode[TransactionSearch](t, get(t, e, "/api/transactions?kind=purchase&kind=refund&card=4417"))
-	if purchases.Total != 2 || purchases.Sum != "20924" {
-		t.Fatalf("purchase+refund on 4417: total=%d sum=%s", purchases.Total, purchases.Sum)
+	// Asked for fees alone, a fee is a row again, pointing at its purchase.
+	fees := decode[TransactionSearch](t, get(t, e, "/api/transactions?kind=foreign_transaction_fee"))
+	if fees.Total != 1 || fees.Items[0].Parent == nil || fees.Items[0].Parent.Id != leather.Id || fees.Items[0].Parent.StatementId != leather.StatementId {
+		t.Fatalf("fees = %+v", fees.Items)
 	}
-	// byKind ignores the kind filter but keeps the card filter.
+	fee := fees.Items[0]
+
+	purchases := decode[TransactionSearch](t, get(t, e, "/api/transactions?kind=purchase&kind=refund&card=4417"))
+	if purchases.Total != 2 || purchases.Sum != "21270.56" {
+		t.Fatalf("purchase (with its fee) + refund on 4417: total=%d sum=%s", purchases.Total, purchases.Sum)
+	}
+	// byKind ignores the kind filter but keeps the card filter, and counts lines as printed.
 	kinds := map[TransactionKind]string{}
 	for _, k := range purchases.ByKind {
 		kinds[k.Kind] = k.Amount
@@ -129,14 +146,56 @@ func TestSearchTransactionsFiltersAndTotals(t *testing.T) {
 		t.Fatalf("q=uber limit=0: total=%d items=%d sum=%s", search.Total, len(search.Items), search.Sum)
 	}
 
-	page := decode[TransactionSearch](t, get(t, e, "/api/transactions?limit=2&offset=5"))
-	if page.Total != 6 || len(page.Items) != 1 {
+	page := decode[TransactionSearch](t, get(t, e, "/api/transactions?limit=2&offset=4"))
+	if page.Total != 5 || len(page.Items) != 1 {
 		t.Fatalf("last page: total=%d items=%d", page.Total, len(page.Items))
+	}
+
+	// By statement instead of by transaction date: HSBC's statement closing 10-20 also carries a
+	// payment dated 09-30, which the October transaction-date filter above leaves out.
+	closing := decode[TransactionSearch](t, get(t, e, "/api/transactions?closingFrom=2026-10-11&closingTo=2026-10-31&limit=0"))
+	if closing.Total != 3 || closing.Sum != "-20009.44" || len(closing.ByCard) != 2 || closing.ByCard[0].Institution != "hsbc" {
+		t.Fatalf("closing 10-11..10-31: total=%d sum=%s byCard=%+v", closing.Total, closing.Sum, closing.ByCard)
+	}
+	closingPurchases := decode[TransactionSearch](t, get(t, e, "/api/transactions?closingFrom=2026-10-01&closingTo=2026-10-10&kind=purchase"))
+	if closingPurchases.Total != 1 || closingPurchases.Items[0].Institution != "esun" {
+		t.Fatalf("purchases closing 10-01..10-10: %+v", closingPurchases)
+	}
+
+	// Amounts sort by size: the -41280 payment is the largest, the -35.5 rebate the smallest.
+	for query, want := range map[string]string{
+		"sort=largest":  "Payment, thank you",
+		"sort=smallest": "U Bear cashback",
+		"sort=oldest":   "Payment, thank you",
+		"sort=newest":   "Leather Atelier Firenze",
+		"sort=bogus":    "Leather Atelier Firenze",
+	} {
+		sorted := decode[TransactionSearch](t, get(t, e, "/api/transactions?limit=1&"+query))
+		if len(sorted.Items) != 1 || sorted.Items[0].Description != want {
+			t.Fatalf("%s: first = %+v, want %q", query, sorted.Items, want)
+		}
+	}
+	largest := decode[TransactionSearch](t, get(t, e, "/api/transactions?sort=largest&kind=purchase"))
+	if len(largest.Items) != 2 || largest.Items[0].Amount != "23104" || largest.Items[1].Amount != "289" {
+		t.Fatalf("largest purchases = %+v", largest.Items)
 	}
 
 	none := decode[TransactionSearch](t, get(t, e, "/api/transactions?from=2030-01-01"))
 	if none.Total != 0 || none.Sum != "0" || len(none.ByKind) != 0 {
 		t.Fatalf("empty match = %+v", none)
+	}
+
+	// A line's family, from either end.
+	fromFee := decode[TransactionFamily](t, get(t, e, "/api/transactions/"+itoa(fee.Id)))
+	if fromFee.Transaction.Id != fee.Id || fromFee.Parent == nil || fromFee.Parent.Id != leather.Id || len(fromFee.Children) != 0 {
+		t.Fatalf("family of the fee = %+v", fromFee)
+	}
+	fromPurchase := decode[TransactionFamily](t, get(t, e, "/api/transactions/"+itoa(leather.Id)))
+	if fromPurchase.Parent != nil || len(fromPurchase.Children) != 1 || fromPurchase.Children[0].Id != fee.Id {
+		t.Fatalf("family of the purchase = %+v", fromPurchase)
+	}
+	if got := get(t, e, "/api/transactions/999999").Code; got != http.StatusNotFound {
+		t.Errorf("unknown transaction: status = %d", got)
 	}
 }
 

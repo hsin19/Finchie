@@ -22,7 +22,7 @@ A self-hosted personal finance platform. It turns bank and credit card statement
 | [`proto/`](proto/) | gRPC contracts, managed with buf. Generated code is committed inside each service. | ✅ |
 | [`web/`](web/) | SvelteKit single-page app, built into the backend binary | ✅ Overview, statements, transactions, upload |
 
-Design decisions and their reasons are in [`docs/adr/`](docs/adr/): 0001 rewrite as V2, 0002 architecture, 0003 tech stack, 0004 money and dates, 0005 ingestion pipeline, 0006 test data, 0007 web app, 0008 authentication.
+Design decisions and their reasons are in [`docs/adr/`](docs/adr/): 0001 rewrite as V2, 0002 architecture, 0003 tech stack, 0004 money and dates, 0005 ingestion pipeline, 0006 test data, 0007 web app, 0008 authentication, 0009 transaction parents.
 
 ## Why V2
 

@@ -65,6 +65,11 @@ func run() error {
 	if err := db.Migrate(ctx, pool); err != nil {
 		return err
 	}
+	linked, err := ingest.Relink(ctx, pool)
+	if err != nil {
+		return err
+	}
+	slog.Info("linked transactions to their parents", "children", linked)
 
 	// The parser is internal and stateless (ADR 0002): plaintext on the private network.
 	limit := grpc.WithDefaultCallOptions(grpc.MaxCallSendMsgSize(int(cfg.MaxUploadBytes()) + 1<<20))

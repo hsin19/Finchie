@@ -134,6 +134,21 @@ paths:
         "404":
           $ref: "#/components/responses/Problem"
 
+  /api/transactions/{id}:
+    get:
+      operationId: getTransaction
+      summary: A transaction with its parent and children, whichever statements they are on
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: The transaction and the lines linked to it
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TransactionFamily" }
+        "404":
+          $ref: "#/components/responses/Problem"
+
   /api/statements/{id}/transactions:
     get:
       operationId: listStatementTransactions
@@ -158,6 +173,11 @@ paths:
         Filters combine with AND. `total` and `sum` cover every matching row, not just this page.
         `byKind` and `byCard` are facets: each ignores its own filter (byKind ignores `kind`, byCard
         ignores `institution` and `card`), so a picker can show the options it would switch to.
+
+        While `kind` includes purchases (or is not given), a line with a parent (a fee or refund
+        linked to its purchase) is not a row of its own but one of the parent's `children`, and rows,
+        `sum`, `byCard`, and the amount sorts count it there: amounts are net of children. `byKind`
+        counts the lines as printed either way.
       parameters:
         - name: from
           in: query
@@ -166,6 +186,14 @@ paths:
         - name: to
           in: query
           description: Last transaction date, inclusive
+          schema: { type: string, format: date }
+        - name: closingFrom
+          in: query
+          description: First closing date of the transaction's statement, inclusive
+          schema: { type: string, format: date }
+        - name: closingTo
+          in: query
+          description: Last closing date of the transaction's statement, inclusive
           schema: { type: string, format: date }
         - name: kind
           in: query
@@ -189,6 +217,10 @@ paths:
           in: query
           description: Case-insensitive substring of the description
           schema: { type: string }
+        - name: sort
+          in: query
+          description: Row order; largest and smallest compare amounts by size, ignoring the sign
+          schema: { $ref: "#/components/schemas/TransactionSort" }
         - name: limit
           in: query
           description: Page size; 0 returns only the totals
@@ -278,6 +310,11 @@ components:
         stated: { $ref: "#/components/schemas/Decimal" }
         statedLabel: { type: string }
 
+    TransactionSort:
+      type: string
+      enum: [newest, oldest, largest, smallest]
+      default: newest
+
     TransactionKind:
       type: string
       enum: [purchase, foreign_transaction_fee, annual_fee, refund, rebate, payment]
@@ -298,6 +335,36 @@ components:
         originalCurrency: { type: string }
         country: { type: string }
         cardLast4: { type: string }
+        parent:
+          $ref: "#/components/schemas/TransactionLink"
+          description: The line this one adjusts, such as the purchase a fee or refund belongs to
+        children:
+          type: array
+          description: Lines that adjust this one, possibly on other statements; absent without any
+          items: { $ref: "#/components/schemas/TransactionLink" }
+
+    TransactionLink:
+      description: Another line, in short, enough to find it and to tell a refund in full
+      type: object
+      required: [id, statementId, kind, transactionDate, amount]
+      properties:
+        id: { type: integer, format: int64 }
+        statementId: { type: integer, format: int64 }
+        kind: { $ref: "#/components/schemas/TransactionKind" }
+        transactionDate: { type: string, format: date }
+        amount: { $ref: "#/components/schemas/Decimal" }
+        originalAmount: { $ref: "#/components/schemas/Decimal" }
+        originalCurrency: { type: string }
+
+    TransactionFamily:
+      type: object
+      required: [transaction, children]
+      properties:
+        transaction: { $ref: "#/components/schemas/Transaction" }
+        parent: { $ref: "#/components/schemas/Transaction" }
+        children:
+          type: array
+          items: { $ref: "#/components/schemas/Transaction" }
 
     TransactionSearch:
       type: object

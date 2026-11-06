@@ -2,6 +2,8 @@ package api
 
 import (
 	"encoding/hex"
+	"encoding/json"
+	"fmt"
 
 	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
@@ -51,7 +53,7 @@ func toStatement(row dbq.ListStatementsRow) Statement {
 	}
 }
 
-func toTransaction(row dbq.ListTransactionsRow) Transaction {
+func toTransaction(row dbq.ListTransactionsRow) (Transaction, error) {
 	tx := Transaction{
 		Id:               row.ID,
 		StatementId:      row.StatementID,
@@ -71,7 +73,21 @@ func toTransaction(row dbq.ListTransactionsRow) Transaction {
 		original := decimalString(row.OriginalAmount)
 		tx.OriginalAmount = &original
 	}
-	return tx
+	if row.Parent != nil {
+		var parent TransactionLink
+		if err := json.Unmarshal(row.Parent, &parent); err != nil {
+			return Transaction{}, fmt.Errorf("parent of transaction %d: %w", row.ID, err)
+		}
+		tx.Parent = &parent
+	}
+	if row.Children != nil {
+		var children []TransactionLink
+		if err := json.Unmarshal(row.Children, &children); err != nil {
+			return Transaction{}, fmt.Errorf("children of transaction %d: %w", row.ID, err)
+		}
+		tx.Children = &children
+	}
+	return tx, nil
 }
 
 // decimalString renders NUMERIC exactly as Postgres stores it ("780.00", "-6553").

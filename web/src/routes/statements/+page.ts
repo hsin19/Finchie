@@ -1,0 +1,44 @@
+import {
+    api,
+    need,
+    type TransactionQuery,
+} from "#lib/api/client.js";
+import {
+    closingMonths,
+    closingRange,
+} from "#lib/bills.js";
+import {
+    isMonth,
+    shiftMonth,
+    thisMonth,
+} from "#lib/dates.js";
+import type { PageLoad } from "./$types";
+
+// ?all lists every statement; otherwise one month's bill: the statements that closed in it (?m=,
+// the newest such month by default) and the transactions on them.
+export const load = (async ({ fetch, url, parent }) => {
+    const { statements } = await parent();
+    if (url.searchParams.has("all")) return { view: "all" as const };
+
+    const months = closingMonths(statements);
+    const m = url.searchParams.get("m");
+    const month = isMonth(m) ? m : (months[0] ?? thisMonth());
+
+    // Totals only (limit 0). With kind=purchase, `sum` and byCard are spending, while byKind (which
+    // ignores the kind filter) still has fees, rebates, and payments.
+    const client = api(fetch);
+    const purchases = (query: TransactionQuery) => client.GET("/api/transactions", { params: { query: { kind: ["purchase"], limit: 0, ...query } } });
+    const [current, previous, overseas] = await Promise.all([
+        purchases(closingRange(month)),
+        purchases(closingRange(shiftMonth(month, -1))),
+        purchases({ ...closingRange(month), overseas: true }),
+    ]);
+    return {
+        view: "period" as const,
+        month,
+        closingMonths: months.includes(month) ? months : [month, ...months].sort().reverse(),
+        current: need(current),
+        previous: need(previous),
+        overseas: need(overseas),
+    };
+}) satisfies PageLoad;
