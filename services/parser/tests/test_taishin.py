@@ -78,3 +78,19 @@ def test_taishin_tracks_cards_countries_and_foreign_amounts() -> None:
     book = by_description["BOOKSTORE ONLINEO1234 SEATTL"]
     assert (book.country, book.original_currency, book.original_amount) == ("US", "USD", Decimal("20.00"))
     assert by_description["HOTEL BOOKINGO9157 Intern"].country == "SG"
+
+
+FOREIGN_REFUND = """消費日 入帳起息日消費明細 新臺幣金額 外幣折算日 消費地 幣別 外幣金額
+Richart卡(原測試御璽) (卡號末四碼:1111)
+115/03/12 115/03/14 ONLINE MARKET SHANGH 280 0313 CN CNY 60.50
+115/03/31 115/04/02 ONLINE MARKET SHANGH -125 0401 CN CNY -27.03"""
+
+
+def test_taishin_reads_refunds_of_foreign_purchases() -> None:
+    page_1 = PAGE_1.replace("3,170", "155")
+    statement = TaishinParser().parse(FakeDocument([page_1, FOREIGN_REFUND]), ocr=None).statement
+    refund = statement.transactions[-1]
+    # Not 3 read out of "-27.03": the foreign amount is negative too.
+    assert (refund.kind, refund.amount) == (Kind.REFUND, Decimal(-125))
+    assert (refund.original_currency, refund.original_amount, refund.country) == ("CNY", Decimal("-27.03"), "CN")
+    assert statement.reconciliation.balanced

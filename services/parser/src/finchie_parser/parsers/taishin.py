@@ -15,16 +15,19 @@ _CARD = re.compile(r"\(卡號末四碼:(\d{4})\)", re.ASCII)
 # "<date> <posted> <description> <amount>" then either "<MMDD> <country> <currency> <foreign amount>"
 # for foreign-currency lines or just "<country>". Long descriptions wrap: the row then has an empty
 # description, with its first half on the line above and the rest (usually the city) below.
+# Refunds of foreign purchases print a negative foreign amount too. The amount must follow a space:
+# otherwise a line the pattern does not fully fit can still match with the amount cut out of a
+# decimal ("-27.03" read as 3), which is worse than not matching at all.
 _ROW = re.compile(
-    r"^(?P<date>\d{3}/\d\d/\d\d) (?P<posted>\d{3}/\d\d/\d\d) ?(?P<desc>.*?) ?(?P<amt>-?[\d,]+)"
-    r"(?: \d{4} (?P<fxcountry>[A-Z]{2}) (?P<cur>[A-Z]{3}) (?P<orig>[\d,]+(?:\.\d+)?)| (?P<country>[A-Z]{2}))?$",
+    r"^(?P<date>\d{3}/\d\d/\d\d) (?P<posted>\d{3}/\d\d/\d\d) (?:(?P<desc>.*?) )?(?P<amt>-?[\d,]+)"
+    r"(?: \d{4} (?P<fxcountry>[A-Z]{2}) (?P<cur>[A-Z]{3}) (?P<orig>-?[\d,]+(?:\.\d+)?)| (?P<country>[A-Z]{2}))?$",
     re.ASCII,
 )
 
 
 class TaishinParser(StatementParser):
     name = "taishin.credit_card"
-    version = "1"
+    version = "2"
     institution = "taishin"
     filename_pattern = re.compile(r"^TSB_Creditcard_Estatement_\d+\.pdf$", re.IGNORECASE)
     text_marker = "台新"
@@ -45,7 +48,7 @@ class TaishinParser(StatementParser):
             if match := _CARD.search(line):
                 card = match.group(1)
             elif match := _ROW.match(line):
-                description = match["desc"]
+                description = match["desc"] or ""
                 if not description and 0 < i < len(lines) - 1:
                     description = f"{lines[i - 1]} {lines[i + 1]}"
                     i += 1

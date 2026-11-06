@@ -21,12 +21,17 @@ _ROW = re.compile(
     r" (?P<country>[A-Z]{2}) (?P<cur>[A-Z]{3})(?: (?P<orig>[\d,]+(?:\.\d+)?)(?: \d\d/\d\d)?)?$",
     re.ASCII,
 )
+# Fees and the annual fee name no country or currency:
+# "<date> <posted> <description> <amount> <card last 4>", e.g. "12/21 01/01 國外交易手續費 -AUSTRA 6 7218".
+_PLAIN_ROW = re.compile(
+    r"^(?P<date>\d\d/\d\d) (?P<posted>\d\d/\d\d) (?P<desc>.+?) (?P<amt>-?[\d,]+) (?P<card>\d{4})$", re.ASCII
+)
 _PAYMENT = re.compile(r"^(?P<date>\d\d/\d\d) (?P<posted>\d\d/\d\d) (?P<desc>\D+) (?P<amt>-[\d,]+)$", re.ASCII)
 
 
 class CathayParser(StatementParser):
     name = "cathay.credit_card"
-    version = "1"
+    version = "2"
     institution = "cathay"
     filename_pattern = re.compile(r"^信用卡電子帳單消費明細_\d+\.pdf$")
     text_marker = "國泰世華"
@@ -64,6 +69,19 @@ class CathayParser(StatementParser):
                         card_last4=match["card"],
                     )
                 )
+            elif match := _PLAIN_ROW.match(line):
+                value = amount(match["amt"])
+                description = clean(match["desc"])
+                transactions.append(
+                    Transaction(
+                        transaction_date=month_day(match["date"], closing),
+                        posting_date=month_day(match["posted"], closing),
+                        description=description,
+                        kind=_plain_kind(description, value),
+                        amount=value,
+                        card_last4=match["card"],
+                    )
+                )
             elif match := _PAYMENT.match(line):
                 transactions.append(
                     Transaction(
@@ -88,3 +106,11 @@ class CathayParser(StatementParser):
             reconciliation=Reconciliation(sum_new_charges(transactions), new_charges, "本期消費"),
         )
         return Parsed(statement)
+
+
+def _plain_kind(description: str, value: Decimal) -> Kind:
+    if "國外交易手續費" in description:
+        return Kind.FOREIGN_TRANSACTION_FEE
+    if "年費" in description:
+        return Kind.ANNUAL_FEE
+    return Kind.REFUND if value < 0 else Kind.PURCHASE
