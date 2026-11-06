@@ -1,6 +1,7 @@
 import re
 from decimal import Decimal
 
+from finchie_parser.errors import LayoutError
 from finchie_parser.model import Kind, Reconciliation, Statement, Transaction
 from finchie_parser.ocr import Ocr
 from finchie_parser.parsers.base import Parsed, StatementParser, find, sum_new_charges
@@ -39,12 +40,14 @@ class CathayParser(StatementParser):
         closing = roc_date(find(_CLOSING, texts[:1], "closing date").group(1))
         due = roc_date(find(_DUE, texts, "due date").group(1))
         total_due = amount(find(_TOTAL_DUE, texts, "本期應繳總額").group(1))
-        new_charges = Decimal(0)
+        # One subtotal per card holder (正卡, 附卡). None until one is read: taking a missing subtotal as
+        # zero would let a layout change that also hides every row reconcile as balanced and empty.
+        new_charges: Decimal | None = None
 
         transactions: list[Transaction] = []
         for line in (line for text in texts for line in text.splitlines()):
             if match := _NEW_CHARGES.match(line):
-                new_charges += amount(match.group(1))
+                new_charges = (new_charges or Decimal(0)) + amount(match.group(1))
             elif match := _ROW.match(line):
                 value = amount(match["amt"])
                 foreign = match["cur"] != "TWD"
@@ -71,6 +74,9 @@ class CathayParser(StatementParser):
                         amount=amount(match["amt"]),
                     )
                 )
+
+        if new_charges is None:
+            raise LayoutError("statement field not found: 本期消費")
 
         statement = Statement(
             institution=self.institution,

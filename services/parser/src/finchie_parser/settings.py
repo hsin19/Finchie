@@ -19,7 +19,9 @@ class Settings(BaseSettings):
     host: str = "[::]"
     port: int = 50051
     workers: int = 2
-    max_message_mb: int = 32
+    # Must exceed the backend's BACKEND_MAX_UPLOAD_MB (32): a request carries the whole file plus its
+    # other fields. The backend allows itself the same 1 MiB of headroom when sending.
+    max_message_mb: int = 33
     ocr: bool = True
     log_level: str = "INFO"
     # PARSER_PDF_PASSWORDS__TAISHIN=... ; keys are institution IDs.

@@ -38,7 +38,7 @@ Environment variables, prefix `PARSER_`, nested keys split by `__`. Local runs a
 | `PARSER_PDF_PASSWORDS__<INSTITUTION>` | — | One per bank whose PDFs are encrypted, e.g. `PARSER_PDF_PASSWORDS__TAISHIN` |
 | `PARSER_PORT` | `50051` | |
 | `PARSER_WORKERS` | `2` | Concurrent parses; the backend also limits concurrency |
-| `PARSER_MAX_MESSAGE_MB` | `32` | gRPC message limit |
+| `PARSER_MAX_MESSAGE_MB` | `33` | gRPC message limit. Keep it 1 above the backend's `BACKEND_MAX_UPLOAD_MB`: a request is the whole file plus its other fields |
 | `PARSER_OCR` | `true` | Without OCR, HSBC descriptions are empty and a warning is returned |
 | `PARSER_LOG_LEVEL` | `INFO` | |
 

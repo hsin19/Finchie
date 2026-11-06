@@ -42,6 +42,12 @@ def test_unknown_content_is_unimplemented(channel: grpc.Channel) -> None:
     assert status_of(channel, b"\x89PNG", "image/png") is grpc.StatusCode.UNIMPLEMENTED
 
 
+def test_accepts_a_document_at_the_backend_upload_limit(channel: grpc.Channel) -> None:
+    # BACKEND_MAX_UPLOAD_MB is 32: the file alone fills it, and the request carries more fields.
+    content = b"\x89PNG" + bytes(32 * 1024 * 1024 - 4)
+    assert status_of(channel, content, "image/png") is grpc.StatusCode.UNIMPLEMENTED
+
+
 def test_health_reports_serving(channel: grpc.Channel) -> None:
     stub = health_pb2_grpc.HealthStub(channel)
     response = stub.Check(health_pb2.HealthCheckRequest(service=server_module.SERVICE_NAME), timeout=5)

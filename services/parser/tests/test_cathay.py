@@ -1,8 +1,10 @@
 from datetime import date
 from decimal import Decimal
 
+import pytest
 from fakes import FakeDocument
 
+from finchie_parser.errors import LayoutError
 from finchie_parser.model import Kind
 from finchie_parser.parsers.cathay import CathayParser
 
@@ -55,3 +57,10 @@ def test_cathay_records_foreign_amounts_only_for_foreign_currency() -> None:
 
 def test_cathay_is_recognized_by_text_on_page_2() -> None:
     assert CathayParser().matches_text(FakeDocument([PAGE_1, PAGE_2]))
+
+
+def test_cathay_without_a_printed_subtotal_is_a_layout_error() -> None:
+    # Unrecognized rows and no subtotal would otherwise reconcile as 0 == 0 with no transactions.
+    unreadable = "\n".join(line for line in PAGE_2.splitlines() if not line.startswith(("03/", "正卡")))
+    with pytest.raises(LayoutError, match="本期消費"):
+        CathayParser().parse(FakeDocument([PAGE_1, unreadable]), ocr=None)

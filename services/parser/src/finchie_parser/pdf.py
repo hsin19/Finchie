@@ -1,6 +1,7 @@
 """Decrypt a PDF and expose what the bank parsers read: text, positioned lines, page images."""
 
 import io
+import threading
 from collections.abc import Sequence
 from dataclasses import dataclass
 from functools import cache
@@ -14,6 +15,10 @@ from PIL.Image import Image
 
 from finchie_parser.documents import Attachment
 from finchie_parser.errors import InvalidDocumentError, PasswordRequiredError
+
+# PDFium is not thread-safe, not even for separate documents, and the server parses on several
+# threads at once. Every call into it (open, render, close) holds this lock.
+_PDFIUM = threading.Lock()
 
 
 @dataclass(frozen=True)
@@ -51,14 +56,23 @@ class PdfDocument:
         return [TextLine(line["text"], line["top"], line["bottom"]) for line in lines]
 
     def render(self, page_index: int, scale: float) -> Image:
-        if self._pdfium is None:
-            self._pdfium = pypdfium2.PdfDocument(self._data)
-        return self._pdfium[page_index].render(scale=scale).to_pil()
+        with _PDFIUM:
+            if self._pdfium is None:
+                self._pdfium = pypdfium2.PdfDocument(self._data)
+            page = self._pdfium[page_index]
+            bitmap = page.render(scale=scale)
+            try:
+                # A copy: the PIL image would otherwise share the bitmap's memory, freed below.
+                return bitmap.to_pil().copy()
+            finally:
+                bitmap.close()
+                page.close()
 
     def close(self) -> None:
         self._plumber.close()
         if self._pdfium is not None:
-            self._pdfium.close()
+            with _PDFIUM:
+                self._pdfium.close()
 
     def __enter__(self) -> Self:
         return self
