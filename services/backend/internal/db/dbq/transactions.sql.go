@@ -26,8 +26,11 @@ WHERE ($1::date IS NULL OR t.transaction_date >= $1::date)
   AND ($7::text IS NULL OR t.card_last4 = $7::text)
   AND (NOT $8::boolean OR t.original_currency IS NOT NULL OR t.country <> 'TW')
   AND ($9::text IS NULL OR strpos(lower(t.description), lower($9::text)) > 0)
-ORDER BY t.transaction_date DESC, t.statement_id DESC, t.line_no
-LIMIT $11 OFFSET $10
+ORDER BY CASE WHEN $10::text = 'largest' THEN abs(t.amount) END DESC NULLS LAST,
+         CASE WHEN $10::text = 'smallest' THEN abs(t.amount) END ASC NULLS LAST,
+         CASE WHEN $10::text = 'oldest' THEN t.transaction_date END ASC NULLS LAST,
+         t.transaction_date DESC, t.statement_id DESC, t.line_no
+LIMIT $12 OFFSET $11
 `
 
 type SearchTransactionsParams struct {
@@ -40,6 +43,7 @@ type SearchTransactionsParams struct {
 	CardLast4   *string
 	Overseas    bool
 	Query       *string
+	Sort        string
 	RowOffset   int32
 	RowLimit    int32
 }
@@ -61,6 +65,8 @@ type SearchTransactionsRow struct {
 
 // Search filters: a NULL argument means "no filter". SearchTransactions and TransactionTotals must
 // apply the same ones.
+// Sort: newest (the default), oldest, largest, or smallest; amounts by size, so a big payment counts as
+// large. Ties go newest first, then in statement line order.
 func (q *Queries) SearchTransactions(ctx context.Context, arg SearchTransactionsParams) ([]SearchTransactionsRow, error) {
 	rows, err := q.db.Query(ctx, searchTransactions,
 		arg.FromDate,
@@ -72,6 +78,7 @@ func (q *Queries) SearchTransactions(ctx context.Context, arg SearchTransactions
 		arg.CardLast4,
 		arg.Overseas,
 		arg.Query,
+		arg.Sort,
 		arg.RowOffset,
 		arg.RowLimit,
 	)

@@ -14,6 +14,7 @@ import {
     shortDate,
     thisMonth,
 } from "#lib/dates.js";
+import { onKeys } from "#lib/keys.svelte.js";
 import {
     cardLabel,
     documentStatus,
@@ -35,6 +36,19 @@ import type { PageData } from "./$types";
 let { data }: { data: Extract<PageData, { view: "period"; }>; } = $props();
 
 const previousMonth = $derived(shiftMonth(data.month, -1));
+
+// [p] and [n] step through the months that have statements (closingMonths is newest first).
+const position = $derived(data.closingMonths.indexOf(data.month));
+const older = $derived(data.closingMonths[position + 1]);
+const newer = $derived(position > 0 ? data.closingMonths[position - 1] : undefined);
+function openMonth(m: string | undefined) {
+    if (m) void goto(resolve(`/statements?m=${m}`));
+}
+
+onKeys({
+    p: () => openMonth(older),
+    n: () => openMonth(newer),
+});
 const byMonth = $derived(byClosingMonth(data.statements));
 const statements = $derived(byMonth.get(data.month) ?? []);
 const documents = $derived(new Map(data.documents.map(d => [d.id, d])));
@@ -75,11 +89,13 @@ const names = (ids: string[]) => ids.map(i => institution(i).name).join("、");
 </script>
 
 <div class="flex flex-wrap items-center gap-2">
+    <button type="button" class="control" disabled={!older} onclick={() => openMonth(older)}>[p] prev</button>
     <MonthSelect
         months={data.closingMonths}
         value={data.month}
         onchange={m => void goto(m === "all" ? resolve("/statements?all") : resolve(`/statements?m=${m}`))}
     />
+    <button type="button" class="control" disabled={!newer} onclick={() => openMonth(newer)}>[n] next</button>
     <span class="text-[12px] text-mute">這個月結帳的帳單</span>
     <a href={resolve("/statements?all")} class="ml-auto text-[12px]">[a] 全部帳單 →</a>
 </div>

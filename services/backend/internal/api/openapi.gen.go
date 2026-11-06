@@ -75,6 +75,30 @@ func (e TransactionKind) Valid() bool {
 	}
 }
 
+// Defines values for TransactionSort.
+const (
+	Largest  TransactionSort = "largest"
+	Newest   TransactionSort = "newest"
+	Oldest   TransactionSort = "oldest"
+	Smallest TransactionSort = "smallest"
+)
+
+// Valid indicates whether the value is a known member of the TransactionSort enum.
+func (e TransactionSort) Valid() bool {
+	switch e {
+	case Largest:
+		return true
+	case Newest:
+		return true
+	case Oldest:
+		return true
+	case Smallest:
+		return true
+	default:
+		return false
+	}
+}
+
 // CardTotal defines model for CardTotal.
 type CardTotal struct {
 	// Amount Decimal number as a string, e.g. "-6552.97"
@@ -213,6 +237,9 @@ type TransactionSearch struct {
 	Total int `json:"total"`
 }
 
+// TransactionSort defines model for TransactionSort.
+type TransactionSort string
+
 // Id defines model for Id.
 type Id = int64
 
@@ -258,6 +285,9 @@ type SearchTransactionsParams struct {
 
 	// Q Case-insensitive substring of the description
 	Q *string `form:"q,omitempty" json:"q,omitempty"`
+
+	// Sort Row order; largest and smallest compare amounts by size, ignoring the sign
+	Sort *TransactionSort `form:"sort,omitempty" json:"sort,omitempty"`
 
 	// Limit Page size; 0 returns only the totals
 	Limit  *int `form:"limit,omitempty" json:"limit,omitempty"`
@@ -495,6 +525,13 @@ func (w *ServerInterfaceWrapper) SearchTransactions(ctx *echo.Context) error {
 	err = runtime.BindQueryParameterWithOptions("form", true, false, "q", ctx.QueryParams(), &params.Q, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
 	if err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter q: %s", err))
+	}
+
+	// ------------- Optional query parameter "sort" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "sort", ctx.QueryParams(), &params.Sort, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter sort: %s", err))
 	}
 
 	// ------------- Optional query parameter "limit" -------------

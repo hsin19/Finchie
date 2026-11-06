@@ -197,6 +197,10 @@ paths:
           in: query
           description: Case-insensitive substring of the description
           schema: { type: string }
+        - name: sort
+          in: query
+          description: Row order; largest and smallest compare amounts by size, ignoring the sign
+          schema: { $ref: "#/components/schemas/TransactionSort" }
         - name: limit
           in: query
           description: Page size; 0 returns only the totals
@@ -285,6 +289,11 @@ components:
         computed: { $ref: "#/components/schemas/Decimal" }
         stated: { $ref: "#/components/schemas/Decimal" }
         statedLabel: { type: string }
+
+    TransactionSort:
+      type: string
+      enum: [newest, oldest, largest, smallest]
+      default: newest
 
     TransactionKind:
       type: string

@@ -145,6 +145,24 @@ func TestSearchTransactionsFiltersAndTotals(t *testing.T) {
 		t.Fatalf("purchases closing 10-01..10-10: %+v", closingPurchases)
 	}
 
+	// Amounts sort by size: the -41280 payment is the largest, the -35.5 rebate the smallest.
+	for query, want := range map[string]string{
+		"sort=largest":  "Payment, thank you",
+		"sort=smallest": "U Bear cashback",
+		"sort=oldest":   "Payment, thank you",
+		"sort=newest":   "Leather Atelier Firenze",
+		"sort=bogus":    "Leather Atelier Firenze",
+	} {
+		sorted := decode[TransactionSearch](t, get(t, e, "/api/transactions?limit=1&"+query))
+		if len(sorted.Items) != 1 || sorted.Items[0].Description != want {
+			t.Fatalf("%s: first = %+v, want %q", query, sorted.Items, want)
+		}
+	}
+	largest := decode[TransactionSearch](t, get(t, e, "/api/transactions?sort=largest&kind=purchase"))
+	if len(largest.Items) != 2 || largest.Items[0].Amount != "23104" || largest.Items[1].Amount != "289" {
+		t.Fatalf("largest purchases = %+v", largest.Items)
+	}
+
 	none := decode[TransactionSearch](t, get(t, e, "/api/transactions?from=2030-01-01"))
 	if none.Total != 0 || none.Sum != "0" || len(none.ByKind) != 0 {
 		t.Fatalf("empty match = %+v", none)

@@ -15,7 +15,12 @@ WHERE (sqlc.narg(from_date)::date IS NULL OR t.transaction_date >= sqlc.narg(fro
   AND (sqlc.narg(card_last4)::text IS NULL OR t.card_last4 = sqlc.narg(card_last4)::text)
   AND (NOT @overseas::boolean OR t.original_currency IS NOT NULL OR t.country <> 'TW')
   AND (sqlc.narg(query)::text IS NULL OR strpos(lower(t.description), lower(sqlc.narg(query)::text)) > 0)
-ORDER BY t.transaction_date DESC, t.statement_id DESC, t.line_no
+-- Sort: newest (the default), oldest, largest, or smallest; amounts by size, so a big payment counts as
+-- large. Ties go newest first, then in statement line order.
+ORDER BY CASE WHEN @sort::text = 'largest' THEN abs(t.amount) END DESC NULLS LAST,
+         CASE WHEN @sort::text = 'smallest' THEN abs(t.amount) END ASC NULLS LAST,
+         CASE WHEN @sort::text = 'oldest' THEN t.transaction_date END ASC NULLS LAST,
+         t.transaction_date DESC, t.statement_id DESC, t.line_no
 LIMIT @row_limit OFFSET @row_offset;
 
 -- name: TransactionTotals :many

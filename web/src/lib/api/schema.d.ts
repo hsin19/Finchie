@@ -204,6 +204,11 @@ export interface components {
             stated: components["schemas"]["Decimal"];
             statedLabel: string;
         };
+        /**
+         * @default newest
+         * @enum {string}
+         */
+        TransactionSort: "newest" | "oldest" | "largest" | "smallest";
         /** @enum {string} */
         TransactionKind: "purchase" | "foreign_transaction_fee" | "annual_fee" | "refund" | "rebate" | "payment";
         Transaction: {
@@ -487,6 +492,8 @@ export interface operations {
                 overseas?: boolean;
                 /** @description Case-insensitive substring of the description */
                 q?: string;
+                /** @description Row order; largest and smallest compare amounts by size, ignoring the sign */
+                sort?: components["schemas"]["TransactionSort"];
                 /** @description Page size; 0 returns only the totals */
                 limit?: number;
                 offset?: number;

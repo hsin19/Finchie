@@ -3,6 +3,7 @@ import {
     type Transaction,
     type TransactionKind,
     TRANSACTIONS_PAGE_SIZE as PAGE_SIZE,
+    type TransactionSort,
 } from "#lib/api/client.js";
 import Dialog from "#lib/components/Dialog.svelte";
 import FileLink from "#lib/components/FileLink.svelte";
@@ -142,7 +143,16 @@ function goPage(n: number) {
     void navigate({ page: n === 1 ? null : String(n) }, { keepPage: true });
 }
 
-// Mobile lists the page grouped by day.
+// ---- Sort: by date or by amount; clicking the active one flips its direction.
+
+const byDate = $derived(data.sort === "newest" || data.sort === "oldest");
+const sortTitles: Record<TransactionSort, string> = { newest: "新到舊", oldest: "舊到新", largest: "大筆在前", smallest: "小筆在前" };
+function setSort(sort: TransactionSort) {
+    selectedId = undefined;
+    void navigate({ sort: sort === "newest" ? null : sort });
+}
+
+// Mobile lists the page grouped by day when sorted by date.
 const days = $derived.by(() => {
     const groups: { date: string; items: Transaction[]; }[] = [];
     for (const t of items) {
@@ -285,7 +295,27 @@ onKeys({
     {#each kindOrder.filter(k => k !== "purchase" && activeKinds.has(k) && kindCounts.has(k)) as kind (kind)}
         <span>{kinds[kind].short} <span class={tone[kinds[kind].tone]}>{formatAmount(kindCounts.get(kind)!.amount)}</span></span>
     {/each}
-    <span class="ml-auto text-mute">sort date ▼</span>
+    <span role="group" aria-label="排序" class="ml-auto flex items-center gap-2 text-mute">
+        sort
+        <button
+            type="button"
+            aria-pressed={byDate}
+            title={sortTitles[data.sort === "oldest" ? "newest" : "oldest"]}
+            class={byDate ? "text-ink" : "hover:text-ink"}
+            onclick={() => setSort(data.sort === "newest" ? "oldest" : "newest")}
+        >
+            date{byDate ? (data.sort === "oldest" ? " ▲" : " ▼") : ""}
+        </button>
+        <button
+            type="button"
+            aria-pressed={!byDate}
+            title={sortTitles[data.sort === "largest" ? "smallest" : "largest"]}
+            class={byDate ? "hover:text-ink" : "text-ink"}
+            onclick={() => setSort(data.sort === "largest" ? "smallest" : "largest")}
+        >
+            amount{byDate ? "" : data.sort === "smallest" ? " ▲" : " ▼"}
+        </button>
+    </span>
 </div>
 
 <div class="grid gap-3 {selected ? 'lg:grid-cols-[1fr_340px]' : ''}">
@@ -328,25 +358,38 @@ onKeys({
             </table>
         </div>
 
-        <!-- Mobile: grouped by day. -->
+        <!-- Mobile: grouped by day when sorted by date; by amount, one list with the date on each row. -->
+        {#snippet mobileRow(t: Transaction, withDate: boolean)}
+            <button type="button" class="flex min-h-11 w-full flex-col gap-0.5 border-t border-rule py-2.5 text-left text-ink" onclick={() => select(t, { open: true })}>
+                <span class="flex w-full justify-between gap-2.5">
+                    <span class="truncate">{t.description}</span>
+                    <span class="shrink-0 {amountTone(t)}">{formatAmount(t.amount)}</span>
+                </span>
+                <span class="text-[12px] text-mute">
+                    {withDate ? `${shortDate(t.transactionDate)} · ` : ""}{cardLabel(t.institution, t.cardLast4)} · {kinds[t.kind].short}{original(t) ? ` · ${original(t)}` : ""}
+                </span>
+            </button>
+        {/snippet}
         <div class="md:hidden">
-            {#each days as day (day.date)}
-                <div class="flex justify-between pt-3 pb-1.5 text-[12px] tracking-[0.06em] text-mute">
-                    <span>{shortDate(day.date)} {weekday(day.date)}</span>
-                    <span>{formatAmount(sum(day.items.map(t => t.amount)))}</span>
-                </div>
-                {#each day.items as t (t.id)}
-                    <button type="button" class="flex min-h-11 w-full flex-col gap-0.5 border-t border-rule py-2.5 text-left text-ink" onclick={() => select(t, { open: true })}>
-                        <span class="flex w-full justify-between gap-2.5">
-                            <span class="truncate">{t.description}</span>
-                            <span class="shrink-0 {amountTone(t)}">{formatAmount(t.amount)}</span>
-                        </span>
-                        <span class="text-[12px] text-mute">{cardLabel(t.institution, t.cardLast4)} · {kinds[t.kind].short}{original(t) ? ` · ${original(t)}` : ""}</span>
-                    </button>
+            {#if byDate}
+                {#each days as day (day.date)}
+                    <div class="flex justify-between pt-3 pb-1.5 text-[12px] tracking-[0.06em] text-mute">
+                        <span>{shortDate(day.date)} {weekday(day.date)}</span>
+                        <span>{formatAmount(sum(day.items.map(t => t.amount)))}</span>
+                    </div>
+                    {#each day.items as t (t.id)}
+                        {@render mobileRow(t, false)}
+                    {/each}
+                {:else}
+                    <p class="m-0 py-3 text-mute">沒有符合的交易。</p>
                 {/each}
             {:else}
-                <p class="m-0 py-3 text-mute">沒有符合的交易。</p>
-            {/each}
+                {#each items as t (t.id)}
+                    {@render mobileRow(t, true)}
+                {:else}
+                    <p class="m-0 py-3 text-mute">沒有符合的交易。</p>
+                {/each}
+            {/if}
         </div>
 
         <div class="flex flex-wrap items-center justify-between gap-2 border-t border-line pt-2.5 text-[12px] text-mute">

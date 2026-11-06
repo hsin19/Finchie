@@ -213,8 +213,12 @@ func (s *Server) SearchTransactions(ctx context.Context, request SearchTransacti
 		CardLast4:   blankAsNil(params.Card),
 		Overseas:    params.Overseas != nil && *params.Overseas,
 		Query:       blankAsNil(params.Q),
+		Sort:        string(Newest),
 		RowLimit:    clamp(params.Limit, defaultLimit, 0, 500),
 		RowOffset:   clamp(params.Offset, 0, 0, math.MaxInt32),
+	}
+	if params.Sort != nil && params.Sort.Valid() {
+		filter.Sort = string(*params.Sort)
 	}
 	if params.Kind != nil {
 		filter.Kinds = make([]string, 0, len(*params.Kind))

@@ -4,6 +4,7 @@ import {
     type TransactionKind,
     type TransactionQuery,
     TRANSACTIONS_PAGE_SIZE as PAGE_SIZE,
+    type TransactionSort,
 } from "#lib/api/client.js";
 import { closingRange } from "#lib/bills.js";
 import {
@@ -16,6 +17,12 @@ import type { PageLoad } from "./$types";
 
 function isKind(value: string): value is TransactionKind {
     return (kindOrder as string[]).includes(value);
+}
+
+const SORTS: TransactionSort[] = ["newest", "oldest", "largest", "smallest"];
+
+function isSort(value: string | null): value is TransactionSort {
+    return (SORTS as (string | null)[]).includes(value);
 }
 
 // Every filter lives in the URL (?m=2026-10&kind=purchase&card=hsbc:4417&q=uber&overseas=1&page=2),
@@ -33,6 +40,8 @@ export const load = (async ({ fetch, url, parent }) => {
     const q = params.get("q") ?? "";
     const overseas = params.get("overseas") === "1";
     const pageNumber = Math.max(1, Math.floor(Number(params.get("page"))) || 1);
+    const sortParam = params.get("sort");
+    const sort: TransactionSort = isSort(sortParam) ? sortParam : "newest";
 
     const query: TransactionQuery = {
         ...(period === "all" ? {} : monthRange(period)),
@@ -42,9 +51,10 @@ export const load = (async ({ fetch, url, parent }) => {
         card: card || undefined,
         q: q || undefined,
         overseas: overseas || undefined,
+        sort: sort === "newest" ? undefined : sort,
         limit: PAGE_SIZE,
         offset: (pageNumber - 1) * PAGE_SIZE,
     };
     const result = need(await api(fetch).GET("/api/transactions", { params: { query } }));
-    return { period, filters: { kinds, institution, card, q, overseas, closing }, pageNumber, result };
+    return { period, filters: { kinds, institution, card, q, overseas, closing }, sort, pageNumber, result };
 }) satisfies PageLoad;
