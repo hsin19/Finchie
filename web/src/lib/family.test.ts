@@ -10,8 +10,9 @@ import {
     refundedInFull,
 } from "./family";
 
-function child(kind: TransactionLink["kind"], amount: string): TransactionLink {
-    return { id: 0, statementId: 0, kind, transactionDate: "2026-07-20", amount };
+function child(kind: TransactionLink["kind"], amount: string, original?: [string, string]): TransactionLink {
+    const link: TransactionLink = { id: 0, statementId: 0, kind, transactionDate: "2026-07-20", amount };
+    return original ? { ...link, originalCurrency: original[0], originalAmount: original[1] } : link;
 }
 
 describe("family", () => {
@@ -32,5 +33,18 @@ describe("family", () => {
         expect(refundedInFull(booking)).toBe(true);
         expect(refundedInFull({ amount: "2150", children: [child("refund", "-431")] })).toBe(false);
         expect(refundedInFull({ amount: "4200", children: [child("foreign_transaction_fee", "63")] })).toBe(false);
+    });
+
+    it("knows a refund in full in the foreign currency, whatever the rate did", () => {
+        const order = {
+            amount: "2150",
+            originalCurrency: "CNY",
+            originalAmount: "470.00",
+            children: [child("refund", "-431", ["CNY", "-94.00"]), child("refund", "-1712", ["CNY", "-376.00"])],
+        };
+        expect(net(order)).toBe("7");
+        expect(refundedInFull(order)).toBe(true);
+        expect(refundedInFull({ ...order, children: [child("refund", "-431", ["CNY", "-94.00"])] })).toBe(false);
+        expect(refundedInFull({ ...order, children: order.children.map(c => ({ ...c, originalCurrency: "USD" })) })).toBe(false);
     });
 });

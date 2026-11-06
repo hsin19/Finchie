@@ -255,7 +255,7 @@ export interface components {
             /** @description Lines that adjust this one, possibly on other statements; absent without any */
             children?: components["schemas"]["TransactionLink"][];
         };
-        /** @description Another line, in short, enough to find it */
+        /** @description Another line, in short, enough to find it and to tell a refund in full */
         TransactionLink: {
             /** Format: int64 */
             id: number;
@@ -265,6 +265,8 @@ export interface components {
             /** Format: date */
             transactionDate: string;
             amount: components["schemas"]["Decimal"];
+            originalAmount?: components["schemas"]["Decimal"];
+            originalCurrency?: string;
         };
         TransactionFamily: {
             transaction: components["schemas"]["Transaction"];

@@ -15,7 +15,7 @@ import {
     sum,
 } from "#lib/money.js";
 
-type Line = Pick<Transaction, "amount" | "children">;
+type Line = Pick<Transaction, "amount" | "children" | "originalAmount" | "originalCurrency">;
 
 /** What the line came to in the end: its amount and every child's. */
 export function net(t: Line): string {
@@ -36,8 +36,15 @@ export function breakdown(t: Line): string {
     return parts.length > 0 ? [`原 ${formatAmount(t.amount)}`, ...parts].join(" · ") : "";
 }
 
-/** A purchase its refunds took back in full; what is left, if anything, is fees. */
+/**
+ * A purchase its refunds took back in full, in NT$ or in its foreign currency, as the backend links
+ * them; what is left, if anything, is fees and the exchange rate moving in between.
+ */
 export function refundedInFull(t: Line): boolean {
-    const refunds = (t.children ?? []).filter(c => c.kind === "refund").map(c => c.amount);
-    return refunds.length > 0 && sign(sum([t.amount, ...refunds])) === 0;
+    const refunds = (t.children ?? []).filter(c => c.kind === "refund");
+    if (refunds.length === 0) return false;
+    if (sign(sum([t.amount, ...refunds.map(r => r.amount)])) === 0) return true;
+    const { originalAmount, originalCurrency } = t;
+    if (!originalAmount || !originalCurrency || refunds.some(r => r.originalCurrency !== originalCurrency)) return false;
+    return sign(sum([originalAmount, ...refunds.map(r => r.originalAmount ?? "0")])) === 0;
 }

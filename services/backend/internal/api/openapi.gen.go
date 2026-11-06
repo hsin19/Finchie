@@ -218,7 +218,7 @@ type Transaction struct {
 	OriginalAmount   *Decimal `json:"originalAmount,omitempty"`
 	OriginalCurrency *string  `json:"originalCurrency,omitempty"`
 
-	// Parent Another line, in short, enough to find it
+	// Parent Another line, in short, enough to find it and to tell a refund in full
 	Parent          *TransactionLink    `json:"parent,omitempty"`
 	PostingDate     *openapi_types.Date `json:"postingDate,omitempty"`
 	StatementId     int64               `json:"statementId"`
@@ -235,16 +235,22 @@ type TransactionFamily struct {
 // TransactionKind defines model for TransactionKind.
 type TransactionKind string
 
-// TransactionLink Another line, in short, enough to find it
+// TransactionLink Another line, in short, enough to find it and to tell a refund in full
 type TransactionLink struct {
 	// Amount Decimal number as a string, e.g. "-6552.97"
 	//
 	// Example: 1234.50
-	Amount          Decimal            `json:"amount"`
-	Id              int64              `json:"id"`
-	Kind            TransactionKind    `json:"kind"`
-	StatementId     int64              `json:"statementId"`
-	TransactionDate openapi_types.Date `json:"transactionDate"`
+	Amount Decimal         `json:"amount"`
+	Id     int64           `json:"id"`
+	Kind   TransactionKind `json:"kind"`
+
+	// OriginalAmount Decimal number as a string, e.g. "-6552.97"
+	//
+	// Example: 1234.50
+	OriginalAmount   *Decimal           `json:"originalAmount,omitempty"`
+	OriginalCurrency *string            `json:"originalCurrency,omitempty"`
+	StatementId      int64              `json:"statementId"`
+	TransactionDate  openapi_types.Date `json:"transactionDate"`
 }
 
 // TransactionSearch defines model for TransactionSearch.

@@ -344,7 +344,7 @@ components:
           items: { $ref: "#/components/schemas/TransactionLink" }
 
     TransactionLink:
-      description: Another line, in short, enough to find it
+      description: Another line, in short, enough to find it and to tell a refund in full
       type: object
       required: [id, statementId, kind, transactionDate, amount]
       properties:
@@ -353,6 +353,8 @@ components:
         kind: { $ref: "#/components/schemas/TransactionKind" }
         transactionDate: { type: string, format: date }
         amount: { $ref: "#/components/schemas/Decimal" }
+        originalAmount: { $ref: "#/components/schemas/Decimal" }
+        originalCurrency: { type: string }
 
     TransactionFamily:
       type: object

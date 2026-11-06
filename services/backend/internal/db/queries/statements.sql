@@ -46,11 +46,13 @@ SELECT t.id, t.statement_id, s.institution, t.transaction_date, t.posting_date, 
 FROM transactions t
 JOIN statements s ON s.id = t.statement_id
 LEFT JOIN LATERAL (SELECT jsonb_build_object('id', p.id, 'statementId', p.statement_id, 'kind', p.kind,
-                                             'transactionDate', p.transaction_date, 'amount', p.amount::text) AS ref
+                                             'transactionDate', p.transaction_date, 'amount', p.amount::text,
+                                             'originalAmount', p.original_amount::text, 'originalCurrency', p.original_currency) AS ref
                    FROM transactions p
                    WHERE p.id = t.parent_id) par ON true
 LEFT JOIN LATERAL (SELECT jsonb_agg(jsonb_build_object('id', c.id, 'statementId', c.statement_id, 'kind', c.kind,
-                                                       'transactionDate', c.transaction_date, 'amount', c.amount::text)
+                                                       'transactionDate', c.transaction_date, 'amount', c.amount::text,
+                                             'originalAmount', c.original_amount::text, 'originalCurrency', c.original_currency)
                                     ORDER BY c.transaction_date, c.id) AS list
                    FROM transactions c
                    WHERE c.parent_id = t.id) kids ON true

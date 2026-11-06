@@ -21,9 +21,10 @@ let { bills, partial }: {
 let view = $state<"chart" | "table">("chart");
 let active = $state<number>();
 
-// About four round steps (1, 2, or 5 × 10ⁿ) up to the tallest column.
+// About four round steps (1, 2, or 5 × 10ⁿ) up to the tallest column as drawn: a bank's credit
+// balance lowers the month's total but not its stack.
 const ticks = $derived.by(() => {
-    const max = Math.max(0, ...bills.map(b => approx(b.total)));
+    const max = Math.max(0, ...bills.map(b => stack(b).total));
     if (max <= 0) return [0];
     const power = 10 ** Math.floor(Math.log10(max / 4));
     const step = [1, 2, 5].map(f => f * power).find(s => s >= max / 4) ?? 10 * power;

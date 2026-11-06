@@ -48,6 +48,12 @@ func Store(ctx context.Context, pool *pgxpool.Pool, documentID int64, response *
 	var outcome string
 	err = pgx.BeginFunc(ctx, pool, func(tx pgx.Tx) error {
 		queries := dbq.New(tx)
+		// Before deleting anything: relinking (below, and in a statement stored at the same time)
+		// updates every linked line, so taking the lock only then would let each side hold rows the
+		// other waits for.
+		if err := queries.LockLinks(ctx); err != nil {
+			return fmt.Errorf("lock links: %w", err)
+		}
 		if err := queries.DeleteStatementsForDocument(ctx, documentID); err != nil {
 			return err
 		}

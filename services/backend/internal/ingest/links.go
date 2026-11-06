@@ -83,8 +83,8 @@ func cents(v float64) int64 {
 }
 
 // relink works out every link again from all the lines and stores them, in the caller's transaction.
-// The lock keeps two statements stored at once from interleaving. It returns how many lines have a
-// parent.
+// The lock keeps two statements stored at once from interleaving; Store takes it earlier, and taking
+// it again in the same transaction is a no-op. It returns how many lines have a parent.
 func relink(ctx context.Context, queries *dbq.Queries) (int, error) {
 	if err := queries.LockLinks(ctx); err != nil {
 		return 0, fmt.Errorf("lock links: %w", err)
@@ -155,9 +155,21 @@ func matchFees(lines []line) map[int64]int64 {
 	type pair struct {
 		fee, purchase int64
 		// Lower is better: by name before by rate, then a fee that is exactly 1.5% rounded, then the
-		// distance from 1.5%.
+		// distance from 1.5%. Named pairs are ranked by rate too: one merchant can have several
+		// purchases on a day.
 		byRate, inexact int
 		distance        float64
+	}
+	rated := func(fee, purchase line, byRate int) pair {
+		feeAmount, purchaseAmount := amount(fee.Amount), amount(purchase.Amount)
+		p := pair{fee: fee.ID, purchase: purchase.ID, byRate: byRate, inexact: 1, distance: math.Inf(1)}
+		if purchaseAmount > 0 {
+			p.distance = math.Abs(feeAmount/purchaseAmount - typicalFeeRate)
+			if math.Round(purchaseAmount*typicalFeeRate) == math.Round(feeAmount) {
+				p.inexact = 0
+			}
+		}
+		return p
 	}
 	var pairs []pair
 	for _, fee := range lines {
@@ -175,28 +187,17 @@ func matchFees(lines []line) map[int64]int64 {
 		var named []pair
 		for _, p := range candidates {
 			if key != "" && strings.HasPrefix(merchantKey(p.Description), key) {
-				named = append(named, pair{fee: fee.ID, purchase: p.ID})
+				named = append(named, rated(fee, p, 0))
 			}
 		}
 		if len(named) > 0 {
 			pairs = append(pairs, named...)
 			continue
 		}
-		feeAmount := amount(fee.Amount)
 		for _, p := range candidates {
-			purchaseAmount := amount(p.Amount)
-			if !(purchaseAmount > 0) {
-				continue
+			if r := rated(fee, p, 1); r.distance <= maxRateDistance {
+				pairs = append(pairs, r)
 			}
-			distance := math.Abs(feeAmount/purchaseAmount - typicalFeeRate)
-			if !(distance <= maxRateDistance) {
-				continue
-			}
-			inexact := 1
-			if math.Round(purchaseAmount*typicalFeeRate) == math.Round(feeAmount) {
-				inexact = 0
-			}
-			pairs = append(pairs, pair{fee: fee.ID, purchase: p.ID, byRate: 1, inexact: inexact, distance: distance})
 		}
 	}
 

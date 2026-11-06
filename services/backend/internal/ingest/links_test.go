@@ -95,6 +95,19 @@ func TestUnnamedFeesGoByRateOnePerPurchase(t *testing.T) {
 	}
 }
 
+func TestNamedFeesGoByRateWithinAMerchant(t *testing.T) {
+	// Two purchases at one merchant on one day, each with a named fee; the larger purchase and the
+	// smaller fee come first, so going by line order would cross them.
+	large := newLine("2026-08-03", "CITYMART DOWNTOWN", kindPurchase, "400", card("1111"))
+	small := newLine("2026-08-03", "CITYMART DOWNTOWN", kindPurchase, "120", card("1111"))
+	smallFee := newLine("2026-08-03", "國外交易手續費CITYMART", kindFee, "2", card("1111"))
+	largeFee := newLine("2026-08-03", "國外交易手續費CITYMART", kindFee, "6", card("1111"))
+
+	parents := matchParents([]line{large, small, smallFee, largeFee})
+	assertParent(t, parents, largeFee, large)
+	assertParent(t, parents, smallFee, small)
+}
+
 func TestFeesStayOnTheirCard(t *testing.T) {
 	onA := newLine("2026-09-20", "UBER *TRIP", kindPurchase, "300", card("1111"))
 	onB := newLine("2026-09-20", "UBER *TRIP", kindPurchase, "300", card("2222"))
@@ -218,5 +231,49 @@ func TestStoringAStatementRelinksTheWholeLedger(t *testing.T) {
 	store(octoberDoc, october)
 	if parent, purchase := refundParent(), purchaseID(); purchase == before || parent != purchase {
 		t.Fatalf("after re-parse: refund parent = %d, want the new purchase %d (was %d)", parent, purchase, before)
+	}
+}
+
+// Two statements whose lines are linked, parsed again at the same time, over and over: neither may
+// deadlock the other.
+func TestConcurrentStoresDoNotDeadlock(t *testing.T) {
+	pool := testdb.Pool(t)
+	ctx := t.Context()
+
+	october := sampleStatement(true)
+	november := sampleStatement(true)
+	november.ClosingDate = &date.Date{Year: 2026, Month: 11, Day: 21}
+	november.Transactions = []*parserv1.Transaction{{
+		TransactionDate:  &date.Date{Year: 2026, Month: 11, Day: 2},
+		Description:      "LEATHER SHOP FIRENZE",
+		Kind:             parserv1.TransactionKind_TRANSACTION_KIND_REFUND,
+		Amount:           &decimal.Decimal{Value: "-28009"},
+		OriginalAmount:   &decimal.Decimal{Value: "-780.00"},
+		OriginalCurrency: "EUR",
+	}}
+	documents := map[int64]*parserv1.Statement{
+		addDocument(t, pool, "october.eml"):  october,
+		addDocument(t, pool, "november.eml"): november,
+	}
+	store := func(id int64) error {
+		_, err := Store(ctx, pool, id, &parserv1.ParseDocumentResponse{Statement: documents[id], Parser: "fake", ParserVersion: "1"})
+		return err
+	}
+	for id := range documents {
+		if err := store(id); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	for range 30 {
+		errs := make(chan error, len(documents))
+		for id := range documents {
+			go func() { errs <- store(id) }()
+		}
+		for range documents {
+			if err := <-errs; err != nil {
+				t.Fatal(err)
+			}
+		}
 	}
 }
