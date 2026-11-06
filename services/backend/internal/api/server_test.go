@@ -13,7 +13,7 @@ import (
 	"github.com/riverqueue/river"
 	"github.com/riverqueue/river/riverdriver/riverpgxv5"
 
-	"github.com/hsin19/Finchie/services/backend/internal/testdb"
+	"github.com/hsin19/finchie/services/backend/internal/testdb"
 )
 
 func newAPI(t *testing.T, maxUploadBytes int64) (*echo.Echo, *pgxpool.Pool) {

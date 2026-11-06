@@ -21,7 +21,7 @@ linters:
           disabled: true
     wrapcheck:
       ignore-package-globs:
-        - github.com/hsin19/Finchie/*
+        - github.com/hsin19/finchie/*
         - github.com/riverqueue/river*
   exclusions:
     generated: strict
@@ -35,4 +35,4 @@ formatters:
   settings:
     goimports:
       local-prefixes:
-        - github.com/hsin19/Finchie
+        - github.com/hsin19/finchie

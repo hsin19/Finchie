@@ -9,7 +9,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/hsin19/Finchie/services/backend/internal/db/dbq"
+	"github.com/hsin19/finchie/services/backend/internal/db/dbq"
 )
 
 type line struct {

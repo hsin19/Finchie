@@ -6,7 +6,7 @@ managed:
     - module: buf.build/googleapis/googleapis
   override:
     - file_option: go_package_prefix
-      value: github.com/hsin19/Finchie/services/backend/internal/gen
+      value: github.com/hsin19/finchie/services/backend/internal/gen
 plugins:
   # Plugin versions must not be newer than the runtime libraries each service
   # pins (go.mod, pyproject.toml); generated code checks this at import time.

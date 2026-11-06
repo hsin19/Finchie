@@ -12,8 +12,8 @@ import (
 	"google.golang.org/genproto/googleapis/type/date"
 	"google.golang.org/genproto/googleapis/type/decimal"
 
-	"github.com/hsin19/Finchie/services/backend/internal/db/dbq"
-	parserv1 "github.com/hsin19/Finchie/services/backend/internal/gen/finchie/parser/v1"
+	"github.com/hsin19/finchie/services/backend/internal/db/dbq"
+	parserv1 "github.com/hsin19/finchie/services/backend/internal/gen/finchie/parser/v1"
 )
 
 // Document statuses, as stored in documents.status.

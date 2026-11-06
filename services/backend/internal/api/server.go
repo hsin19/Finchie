@@ -23,8 +23,8 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 	"github.com/riverqueue/river"
 
-	"github.com/hsin19/Finchie/services/backend/internal/db/dbq"
-	"github.com/hsin19/Finchie/services/backend/internal/ingest"
+	"github.com/hsin19/finchie/services/backend/internal/db/dbq"
+	"github.com/hsin19/finchie/services/backend/internal/ingest"
 )
 
 const defaultLimit = 100

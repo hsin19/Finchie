@@ -559,7 +559,7 @@ const file_finchie_parser_v1_parser_proto_rawDesc = "" +
 	"\x18TRANSACTION_KIND_PAYMENT\x10\x062s\n" +
 	"\rParserService\x12b\n" +
 	"\rParseDocument\x12'.finchie.parser.v1.ParseDocumentRequest\x1a(.finchie.parser.v1.ParseDocumentResponseB\xde\x01\n" +
-	"\x15com.finchie.parser.v1B\vParserProtoP\x01ZRgithub.com/hsin19/Finchie/services/backend/internal/gen/finchie/parser/v1;parserv1\xa2\x02\x03FPX\xaa\x02\x11Finchie.Parser.V1\xca\x02\x11Finchie\\Parser\\V1\xe2\x02\x1dFinchie\\Parser\\V1\\GPBMetadata\xea\x02\x13Finchie::Parser::V1b\x06proto3"
+	"\x15com.finchie.parser.v1B\vParserProtoP\x01ZRgithub.com/hsin19/finchie/services/backend/internal/gen/finchie/parser/v1;parserv1\xa2\x02\x03FPX\xaa\x02\x11Finchie.Parser.V1\xca\x02\x11Finchie\\Parser\\V1\xe2\x02\x1dFinchie\\Parser\\V1\\GPBMetadata\xea\x02\x13Finchie::Parser::V1b\x06proto3"
 
 var (
 	file_finchie_parser_v1_parser_proto_rawDescOnce sync.Once

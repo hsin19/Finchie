@@ -1,4 +1,4 @@
-module github.com/hsin19/Finchie/services/backend
+module github.com/hsin19/finchie/services/backend
 
 go 1.27.3
 

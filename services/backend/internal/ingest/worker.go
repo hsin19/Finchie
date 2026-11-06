@@ -15,8 +15,8 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/hsin19/Finchie/services/backend/internal/db/dbq"
-	parserv1 "github.com/hsin19/Finchie/services/backend/internal/gen/finchie/parser/v1"
+	"github.com/hsin19/finchie/services/backend/internal/db/dbq"
+	parserv1 "github.com/hsin19/finchie/services/backend/internal/gen/finchie/parser/v1"
 )
 
 // ParseDocumentArgs is the job enqueued on upload and on re-parse.

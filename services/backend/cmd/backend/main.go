@@ -19,12 +19,12 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	"github.com/hsin19/Finchie/services/backend/internal/api"
-	"github.com/hsin19/Finchie/services/backend/internal/config"
-	"github.com/hsin19/Finchie/services/backend/internal/db"
-	parserv1 "github.com/hsin19/Finchie/services/backend/internal/gen/finchie/parser/v1"
-	"github.com/hsin19/Finchie/services/backend/internal/ingest"
-	"github.com/hsin19/Finchie/services/backend/internal/web"
+	"github.com/hsin19/finchie/services/backend/internal/api"
+	"github.com/hsin19/finchie/services/backend/internal/config"
+	"github.com/hsin19/finchie/services/backend/internal/db"
+	parserv1 "github.com/hsin19/finchie/services/backend/internal/gen/finchie/parser/v1"
+	"github.com/hsin19/finchie/services/backend/internal/ingest"
+	"github.com/hsin19/finchie/services/backend/internal/web"
 )
 
 func main() {

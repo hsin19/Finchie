@@ -14,7 +14,7 @@ import (
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
 
-	"github.com/hsin19/Finchie/services/backend/internal/db"
+	"github.com/hsin19/finchie/services/backend/internal/db"
 )
 
 // Same major version as the homelab.

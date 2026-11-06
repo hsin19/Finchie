@@ -9,7 +9,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	parserv1 "github.com/hsin19/Finchie/services/backend/internal/gen/finchie/parser/v1"
+	parserv1 "github.com/hsin19/finchie/services/backend/internal/gen/finchie/parser/v1"
 )
 
 func TestConvertMapsStatementAndTransactions(t *testing.T) {

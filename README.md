@@ -4,7 +4,7 @@ Finchie = Finance + Finch
 
 A self-hosted personal finance platform. It turns bank and credit card statements into a ledger and, later, tracks investments, so you can see where your money goes and where you stand.
 
-> **V2 is under construction on `main`.** V1 (a Python batch job plus a Go API on MongoDB) is frozen at tag [`v1.0.0`](https://github.com/hsin19/Finchie/tree/v1.0.0) and no longer on `main`.
+> **V2 is under construction on `main`.** V1 (a Python batch job plus a Go API on MongoDB) is frozen at tag [`v1.0.0`](https://github.com/hsin19/finchie/tree/v1.0.0) and no longer on `main`.
 
 ## Components
 

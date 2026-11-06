@@ -6,7 +6,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 
-	"github.com/hsin19/Finchie/services/backend/internal/db/dbq"
+	"github.com/hsin19/finchie/services/backend/internal/db/dbq"
 )
 
 func toDocument(row dbq.GetDocumentRow) Document {

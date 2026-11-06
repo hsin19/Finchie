@@ -14,9 +14,9 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/hsin19/Finchie/services/backend/internal/db/dbq"
-	parserv1 "github.com/hsin19/Finchie/services/backend/internal/gen/finchie/parser/v1"
-	"github.com/hsin19/Finchie/services/backend/internal/testdb"
+	"github.com/hsin19/finchie/services/backend/internal/db/dbq"
+	parserv1 "github.com/hsin19/finchie/services/backend/internal/gen/finchie/parser/v1"
+	"github.com/hsin19/finchie/services/backend/internal/testdb"
 )
 
 type fakeParser struct {
