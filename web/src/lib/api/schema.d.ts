@@ -62,7 +62,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The original file exactly as uploaded */
+        /**
+         * The original file exactly as uploaded
+         * @description PDFs open in the browser (inline); everything else downloads (attachment). The file is served
+         *     from the web app's own origin, so nothing a browser could run as a page is ever shown in place.
+         */
         get: operations["getDocumentContent"];
         put?: never;
         post?: never;
@@ -386,6 +390,7 @@ export interface operations {
             200: {
                 headers: {
                     "Content-Disposition"?: string;
+                    "X-Content-Type-Options"?: "nosniff";
                     [name: string]: unknown;
                 };
                 content: {

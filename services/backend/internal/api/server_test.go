@@ -3,9 +3,11 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"net/textproto"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -31,9 +33,18 @@ func newAPI(t *testing.T, maxUploadBytes int64) (*echo.Echo, *pgxpool.Pool) {
 
 func postFile(t *testing.T, e *echo.Echo, field, name string, content []byte) *httptest.ResponseRecorder {
 	t.Helper()
+	return postFileAs(t, e, field, name, "application/octet-stream", content)
+}
+
+// postFileAs uploads with the Content-Type a browser would declare for the file.
+func postFileAs(t *testing.T, e *echo.Echo, field, name, declared string, content []byte) *httptest.ResponseRecorder {
+	t.Helper()
 	var body bytes.Buffer
 	form := multipart.NewWriter(&body)
-	part, err := form.CreateFormFile(field, name)
+	header := textproto.MIMEHeader{}
+	header.Set("Content-Disposition", fmt.Sprintf(`form-data; name=%q; filename=%q`, field, name))
+	header.Set("Content-Type", declared)
+	part, err := form.CreatePart(header)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -138,5 +149,35 @@ func TestReadEndpoints(t *testing.T) {
 		if got := get(t, e, path).Code; got != http.StatusNotFound {
 			t.Errorf("%s: status = %d", path, got)
 		}
+	}
+}
+
+func TestOriginalsKeepOnlySafeContentTypesAndOnlyPDFsOpenInPlace(t *testing.T) {
+	e, _ := newAPI(t, 1<<20)
+	cases := []struct {
+		name, declared string
+		content        []byte
+		stored         string
+		disposition    string
+	}{
+		{"statement.pdf", "application/pdf", []byte("%PDF-1.7 ..."), "application/pdf", "inline; filename=statement.pdf"},
+		{"statement.eml", "application/octet-stream", []byte("From: bank\r\n\r\nhello"), "message/rfc822", "attachment; filename=statement.eml"},
+		// What the browser declares is ignored: these would run as pages on the app's origin.
+		{"page.html", "text/html", []byte("<script>alert(1)</script>"), "application/octet-stream", "attachment; filename=page.html"},
+		{"image.svg", "image/svg+xml", []byte(`<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>`), "application/octet-stream", "attachment; filename=image.svg"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			doc := decode[Document](t, postFileAs(t, e, "file", tc.name, tc.declared, tc.content))
+			if doc.ContentType != tc.stored {
+				t.Fatalf("stored content type = %q, want %q", doc.ContentType, tc.stored)
+			}
+			recorder := get(t, e, fmt.Sprintf("/api/documents/%d/content", doc.Id))
+			header := recorder.Header()
+			if recorder.Code != http.StatusOK || header.Get("Content-Type") != tc.stored ||
+				header.Get("Content-Disposition") != tc.disposition || header.Get("X-Content-Type-Options") != "nosniff" {
+				t.Fatalf("content: %d %v", recorder.Code, header)
+			}
+		})
 	}
 }

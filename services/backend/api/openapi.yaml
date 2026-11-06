@@ -84,6 +84,9 @@ paths:
     get:
       operationId: getDocumentContent
       summary: The original file exactly as uploaded
+      description: |
+        PDFs open in the browser (inline); everything else downloads (attachment). The file is served
+        from the web app's own origin, so nothing a browser could run as a page is ever shown in place.
       parameters:
         - $ref: "#/components/parameters/Id"
       responses:
@@ -92,6 +95,8 @@ paths:
           headers:
             Content-Disposition:
               schema: { type: string }
+            X-Content-Type-Options:
+              schema: { type: string, enum: [nosniff] }
           content:
             "*/*":
               schema:

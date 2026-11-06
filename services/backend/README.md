@@ -11,7 +11,7 @@ Defined spec-first in [`api/openapi.yaml`](api/openapi.yaml); `oapi-codegen` gen
 | `POST` | `/api/documents` | Multipart field `file`: an `.eml` or PDF. `201` when new, `200` when the same bytes were uploaded before |
 | `GET` | `/api/documents` | Newest first, `?limit=` up to 500 |
 | `GET` | `/api/documents/{id}` | Status, parser, warnings, error |
-| `GET` | `/api/documents/{id}/content` | The original file, with the content type detected at upload |
+| `GET` | `/api/documents/{id}/content` | The original file. Only PDFs open in the browser; anything else downloads, with `nosniff`. The stored content type comes from the bytes (`%PDF`) or the `.eml` extension, never from what the browser declared, because the file is served from the web app's origin |
 | `POST` | `/api/documents/{id}/reparse` | Parse the stored original again. The document's statement is replaced, so it gets a new id |
 | `GET` | `/api/statements` | Newest closing date first, with each statement's transaction count |
 | `GET` | `/api/statements/{id}` | One statement |

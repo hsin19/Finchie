@@ -142,13 +142,22 @@ func (s *Server) GetDocumentContent(ctx context.Context, request GetDocumentCont
 	if err != nil {
 		return nil, fmt.Errorf("get document %d content: %w", request.Id, err)
 	}
-	// inline: a browser shows PDFs in place; e-mails download either way.
-	disposition := mime.FormatMediaType("inline", map[string]string{"filename": row.Filename})
+	// The original comes from the app's own origin: only a PDF may open in place. Anything else
+	// downloads, and nosniff stops the browser from guessing its way to HTML.
+	disposition := "attachment"
+	if row.ContentType == contentTypePDF {
+		disposition = "inline"
+	}
+	disposition = mime.FormatMediaType(disposition, map[string]string{"filename": row.Filename})
+	nosniff := "nosniff"
 	return GetDocumentContent200AsteriskResponse{
 		Body:          bytes.NewReader(row.Content),
 		ContentType:   row.ContentType,
 		ContentLength: int64(len(row.Content)),
-		Headers:       GetDocumentContent200ResponseHeaders{ContentDisposition: &disposition},
+		Headers: GetDocumentContent200ResponseHeaders{
+			ContentDisposition:  &disposition,
+			XContentTypeOptions: &nosniff,
+		},
 	}, nil
 }
 
@@ -282,22 +291,27 @@ func readFilePart(reader *multipart.Reader, maxBytes int64) (upload, error) {
 			return upload{}, errors.New("file is empty")
 		}
 		name := filepath.Base(part.FileName())
-		return upload{name: name, contentType: contentType(name, part.Header.Get("Content-Type"), data), data: data}, nil
+		return upload{name: name, contentType: contentType(name, data), data: data}, nil
 	}
 }
 
-// contentType trusts the bytes and the file extension over the browser, which often sends
-// application/octet-stream for .eml files.
-func contentType(name, declared string, data []byte) string {
+const (
+	contentTypePDF   = "application/pdf"
+	contentTypeEmail = "message/rfc822"
+	contentTypeOther = "application/octet-stream"
+)
+
+// contentType is decided from the bytes and the file extension only, never from what the browser
+// declares: the original is served back from the app's origin, so a stored "text/html" or
+// "image/svg+xml" would run there. The parser reads only PDFs and e-mails anyway.
+func contentType(name string, data []byte) string {
 	switch {
 	case bytes.HasPrefix(data, []byte("%PDF")):
-		return "application/pdf"
+		return contentTypePDF
 	case strings.EqualFold(filepath.Ext(name), ".eml"):
-		return "message/rfc822"
-	case declared != "":
-		return declared
+		return contentTypeEmail
 	default:
-		return "application/octet-stream"
+		return contentTypeOther
 	}
 }
 
