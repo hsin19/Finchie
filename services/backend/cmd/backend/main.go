@@ -19,6 +19,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
+	"github.com/hsin19/finchie/services/backend/internal/access"
 	"github.com/hsin19/finchie/services/backend/internal/api"
 	"github.com/hsin19/finchie/services/backend/internal/config"
 	"github.com/hsin19/finchie/services/backend/internal/db"
@@ -94,6 +95,13 @@ func run() error {
 	e := echo.New()
 	e.Logger = logger
 	e.Use(middleware.Recover(), middleware.RequestLogger(), middleware.BodyLimit(cfg.MaxUploadBytes()+1<<20))
+	if cfg.AccessEnabled() {
+		e.Use(access.New(ctx, cfg.AccessTeamDomain, cfg.AccessAudience).Middleware("/healthz"))
+		slog.Info("requests must come through Cloudflare Access", "team", cfg.AccessTeamDomain)
+	} else {
+		slog.Warn("Cloudflare Access verification is off: anyone who reaches the backend can use it " +
+			"(set BACKEND_ACCESS_TEAM_DOMAIN and BACKEND_ACCESS_AUD in production)")
+	}
 	e.GET("/healthz", func(c *echo.Context) error {
 		if err := pool.Ping(c.Request().Context()); err != nil {
 			return c.String(http.StatusServiceUnavailable, "database unreachable")

@@ -22,7 +22,7 @@ A self-hosted personal finance platform. It turns bank and credit card statement
 | [`proto/`](proto/) | gRPC contracts, managed with buf. Generated code is committed inside each service. | ✅ |
 | [`web/`](web/) | SvelteKit single-page app, built into the backend binary | ✅ Overview, statements, transactions, upload |
 
-Design decisions and their reasons are in [`docs/adr/`](docs/adr/): 0001 rewrite as V2, 0002 architecture, 0003 tech stack, 0004 money and dates, 0005 ingestion pipeline, 0006 test data, 0007 web app.
+Design decisions and their reasons are in [`docs/adr/`](docs/adr/): 0001 rewrite as V2, 0002 architecture, 0003 tech stack, 0004 money and dates, 0005 ingestion pipeline, 0006 test data, 0007 web app, 0008 authentication.
 
 ## Why V2
 
@@ -84,4 +84,6 @@ GitHub Actions in [`.github/workflows/`](.github/workflows/README.md): `check.ym
 
 ## Deployment
 
-The homelab's Docker Compose runs the released images behind Cloudflare Tunnel and Access (not set up yet). Only the backend is reachable from outside; the parser stays on the internal network. Pin a version tag, never `latest`.
+The homelab's Docker Compose runs the released images behind Cloudflare Tunnel and Access. Only the backend is reachable from outside; the parser stays on the internal network. Pin a version tag, never `latest`.
+
+Sign-in is Cloudflare Access with Google, and the backend also verifies every request's Access token (ADR 0008): set `BACKEND_ACCESS_TEAM_DOMAIN` and `BACKEND_ACCESS_AUD` there.

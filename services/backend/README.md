@@ -54,6 +54,8 @@ Only `UNAVAILABLE`, `DEADLINE_EXCEEDED`, and `RESOURCE_EXHAUSTED` are retried (6
 | `BACKEND_PARSE_CONCURRENCY` | `2` | Documents parsed at once; keep at or below the parser's workers |
 | `BACKEND_MAX_UPLOAD_MB` | `32` | |
 | `BACKEND_LOG_FORMAT` | `json` | `json` or `text` |
+| `BACKEND_ACCESS_TEAM_DOMAIN` | — | Cloudflare Access team domain, `https://<team>.cloudflareaccess.com`. With `BACKEND_ACCESS_AUD`, every request but `/healthz` needs a valid Access token (ADR 0008). Leave both empty locally |
+| `BACKEND_ACCESS_AUD` | — | The Finchie Access application's AUD tag (not a secret) |
 
 `task backend:run` reads `../../.local/backend.env`.
 
