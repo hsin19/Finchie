@@ -1,0 +1,71 @@
+// Amounts arrive as decimal strings ("-6552.97", ADR 0004) and stay exact: they are added as scaled
+// integers, never as floating point.
+
+interface Fixed {
+    units: bigint;
+    scale: number;
+}
+
+function parse(value: string): Fixed {
+    const match = /^([+-]?)(\d+)(?:\.(\d+))?$/.exec(value.trim());
+    if (!match) throw new Error(`not a decimal amount: ${JSON.stringify(value)}`);
+    const [, sign, whole, fraction = ""] = match;
+    const units = BigInt(whole + fraction);
+    return { units: sign === "-" ? -units : units, scale: fraction.length };
+}
+
+function rescale(value: Fixed, scale: number): bigint {
+    return value.units * 10n ** BigInt(scale - value.scale);
+}
+
+function render({ units, scale }: Fixed): string {
+    const negative = units < 0n;
+    const digits = (negative ? -units : units).toString().padStart(scale + 1, "0");
+    const whole = digits.slice(0, digits.length - scale);
+    const fraction = scale > 0 ? `.${digits.slice(-scale)}` : "";
+    return `${negative ? "-" : ""}${whole}${fraction}`;
+}
+
+export function sum(values: Iterable<string>): string {
+    let total: Fixed = { units: 0n, scale: 0 };
+    for (const value of values) {
+        const next = parse(value);
+        const scale = Math.max(total.scale, next.scale);
+        total = { units: rescale(total, scale) + rescale(next, scale), scale };
+    }
+    return render(total);
+}
+
+export function negate(value: string): string {
+    const parsed = parse(value);
+    return render({ units: -parsed.units, scale: parsed.scale });
+}
+
+export function subtract(a: string, b: string): string {
+    return sum([a, negate(b)]);
+}
+
+export function sign(value: string): -1 | 0 | 1 {
+    const { units } = parse(value);
+    return units < 0n ? -1 : units > 0n ? 1 : 0;
+}
+
+/** For proportions only (bar widths, percentages); never for arithmetic on money. */
+export function approx(value: string): number {
+    return Number(value);
+}
+
+/**
+ * Display form: thousands separators, whole amounts without decimals, others with at least two.
+ * "23104" → "23,104", "-35.5" → "-35.50", "780.00" → "780". `signed` adds "+" to positive amounts.
+ */
+export function formatAmount(value: string, { signed = false } = {}): string {
+    const { units, scale } = parse(value);
+    const negative = units < 0n;
+    const digits = (negative ? -units : units).toString().padStart(scale + 1, "0");
+    const whole = digits.slice(0, digits.length - scale).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    let fraction = scale > 0 ? digits.slice(-scale).replace(/0+$/, "") : "";
+    if (fraction) fraction = `.${fraction.padEnd(2, "0")}`;
+    const prefix = negative ? "-" : signed && units > 0n ? "+" : "";
+    return `${prefix}${whole}${fraction}`;
+}

@@ -1,0 +1,51 @@
+[project]
+name = "finchie-parser"
+version = "0.1.0"
+description = "Finchie's stateless document parser: raw statements in, structured data out, over gRPC"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    # Generated code checks these at import time; keep them at or above the
+    # plugin versions in buf.gen.yaml.
+    "grpcio>=1.85.1",
+    "grpcio-health-checking>=1.85.1",
+    "grpcio-reflection>=1.85.1",
+    "protobuf>=7.36.2",
+    "googleapis-common-protos>=1.76.0",
+    "pdfplumber>=0.11.10",
+    "pikepdf>=10.17.0",
+    "pycountry>=24.6.1",
+    "pydantic-settings>=2.16.2",
+    "pypdfium2>=5.14.0",
+    "rapidocr>=3.10.0",
+    "onnxruntime>=1.31.1",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.2",
+    "ruff>=0.14.0",
+]
+
+[project.scripts]
+finchie-parser = "finchie_parser.server:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+# finchie/ holds the code generated from proto/ (do not edit).
+packages = ["src/finchie_parser", "src/finchie"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120
+extend-exclude = ["src/finchie"]
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "UP", "B", "SIM", "I", "N", "RUF", "PT", "DTZ"]
+# Statements are full of full-width CJK punctuation; parsers and fixtures must match it verbatim.
+ignore = ["RUF001", "RUF002", "RUF003"]

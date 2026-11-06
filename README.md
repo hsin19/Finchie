@@ -2,49 +2,86 @@
 
 Finchie = Finance + Finch
 
-Finchie is a personal financial data integration tool that automatically collects, processes, and visualizes your financial data to help you understand spending patterns effortlessly.
+A self-hosted personal finance platform. It turns bank and credit card statements into a ledger and, later, tracks investments, so you can see where your money goes and where you stand.
 
-## Features
+> **V2 is under construction on `main`.** V1 (a Python batch job plus a Go API on MongoDB) is frozen at tag [`v1.0.0`](https://github.com/hsin19/finchie/tree/v1.0.0) and no longer on `main`.
 
-- Automatically parses financial statements from multiple sources
-- Displays visual analytics for spending trends and categories
-- Restricts access to personal accounts for enhanced security
-- Updates automatically on a schedule, requiring no manual intervention
-- Adapts to both desktop and mobile devices with responsive design
+## Components
 
-## Technical Architecture & Tech Stack
+**Services** (deployed)
 
-The Finchie system is organized into three interconnected services under a `services` directory, designed with a modular approach and deployed independently:
+| Path | What it is | Status |
+|---|---|---|
+| [`services/backend`](services/backend/) | Go. The only public service: API, document ingestion, background jobs, and the web app (embedded). Owns the database. | ✅ Upload, parse, and read statements |
+| [`services/parser`](services/parser/) | Python. Stateless parser behind gRPC: a raw statement goes in, structured data comes out. Internal only. | ✅ 4 banks |
 
-### 🛠️ [Ledger Service](services/ledger-svc/)
-Serves as the central hub for financial data storage and retrieval, processing incoming REST requests from the Statement Fetcher and providing RESTful endpoints for the Web App service.
+**Shared**
 
-- **Go**: Efficient backend development
-- **Azure Functions**: Serverless deployment on Azure
-- **Azure Cosmos DB (MongoDB API)**: NoSQL database storage
-- **OAuth**: Secure authentication
+| Path | What it is | Status |
+|---|---|---|
+| [`proto/`](proto/) | gRPC contracts, managed with buf. Generated code is committed inside each service. | ✅ |
+| [`web/`](web/) | SvelteKit single-page app, built into the backend binary | ✅ Overview, statements, transactions, upload |
 
-### 📡 [Statement Fetcher](services/statement-fetcher/)
-Automatically fetches and processes statements from multiple sources, extracting structured data, and sending it to the ledger service via RESTful HTTP requests for permanent storage.
+Design decisions and their reasons are in [`docs/adr/`](docs/adr/): 0001 rewrite as V2, 0002 architecture, 0003 tech stack, 0004 money and dates, 0005 ingestion pipeline, 0006 test data, 0007 web app.
 
-- **Python**: Data extraction and processing
-- **Gmail API**: Fetching financial emails
-- **GitHub Actions**: Scheduled execution via cron jobs (no standalone deployment)
+## Why V2
 
-### 🌍 Web App
-Delivers a responsive, user-friendly interface that fetches and visualizes financial data by calling the Ledger Service's REST endpoints.
+V1 stalled on Gmail OAuth (7-day refresh tokens unless the app passes Google's verification), its parser returned wrong data without noticing, money was `float64`, and the deployment plan (Azure + GitHub Pages) no longer matched where things run. The scope also grew: Finchie now absorbs InTheGreenYet, an investment tracker on Notion that was too slow. Details in [ADR 0001](docs/adr/0001-rewrite-as-v2.md).
 
-- **Next.js**: Modern frontend framework
-- **React**: Dynamic UI components
-- **GitHub Pages**: Static site deployment
+## Architecture
 
-## Service Communication
+```
+browser ── Cloudflare Access ── Tunnel ──▶ backend (Go) ── gRPC ──▶ parser (Python)
+                                             │
+                                             └── Postgres
+```
 
-- **Statement Fetcher to Ledger Service**: Sends structured data via HTTP POST requests to API endpoints.
-- **Web App to Ledger Service**: Fetches data using HTTP GET requests with OAuth authentication.
+- The backend serves the web app and the API from one origin; the app is a static build embedded in the binary.
+- The backend stores every uploaded document as-is, then a background job asks the parser to read it. Parsed results can always be rebuilt from the stored originals.
+- Every parsed statement is reconciled: the transactions must add up to the amount printed on the statement. Statements that don't are kept but flagged for review instead of being trusted.
+- The parser never touches the database. Retries, back-off, and concurrency limits live in the backend's job queue.
 
-## Deployment Workflow
+## Supported statements
 
-- **Statement Fetcher**: Triggered daily by GitHub Actions, pushes data to the Ledger Service.
-- **Ledger Service**: Deployed to Azure Functions, handles data storage and retrieval.
-- **Web App**: Hosted on GitHub Pages, pulls data from the Ledger Service.
+| Institution | Source | Notes |
+|---|---|---|
+| E.SUN Bank | PDF attached to the e-statement e-mail | |
+| Taishin Bank | Password-protected PDF | One bill can list several Richart cards |
+| Cathay United Bank | Password-protected PDF | |
+| HSBC Taiwan | Password-protected PDF | Transaction descriptions are images, read with OCR |
+
+Upload the e-mail (`.eml`) or the PDF itself.
+
+## Getting started
+
+Prerequisites: Go 1.27+, [uv](https://docs.astral.sh/uv/), Node 26 and pnpm, [Task](https://taskfile.dev/), Docker (for Postgres).
+
+```sh
+task --list              # everything you can run
+task web:install         # web dependencies
+task check               # what CI runs: proto checks, lint, tests, and the web build
+docker compose up -d     # local Postgres
+task parser:run          # gRPC on :50051
+task backend:web         # build the web app into the backend (optional for API-only work)
+task backend:run         # HTTP on :8080: the web app and /api
+task web:dev             # or: Vite on :5173 with hot reload, /api proxied to :8080
+curl -F file=@statement.eml localhost:8080/api/documents
+```
+
+Local configuration and secrets go in `.local/` (gitignored):
+
+| File | Contents |
+|---|---|
+| `.local/backend.env` | `BACKEND_DATABASE_URL=postgres://finchie:finchie@localhost:5432/finchie?sslmode=disable` |
+| `.local/parser.env` | `PARSER_PDF_PASSWORDS__<INSTITUTION>=…` for each bank whose PDFs are encrypted |
+| `.local/statements/` | Real statements for `task parser:test-real` |
+
+`docker compose --profile app up --build` runs Postgres, the parser, and the backend (web app included) as containers (needs BuildKit, i.e. `docker buildx`). See each service's README for every variable it reads.
+
+## CI and releases
+
+GitHub Actions in [`.github/workflows/`](.github/workflows/README.md): `check.yml` runs on PRs, pushes to `main`, and releases. Pushing a `v*` tag (`git tag v2.0.0 && git push origin v2.0.0`) builds both images for `linux/amd64` and `linux/arm64`, smoke-checks each, and publishes `ghcr.io/hsin19/finchie-backend` and `ghcr.io/hsin19/finchie-parser` tagged `2.0.0`, `2.0`, and `sha-<short sha>`.
+
+## Deployment
+
+The homelab's Docker Compose runs the released images behind Cloudflare Tunnel and Access (not set up yet). Only the backend is reachable from outside; the parser stays on the internal network. Pin a version tag, never `latest`.

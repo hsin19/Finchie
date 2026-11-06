@@ -1,0 +1,49 @@
+{
+  "indentWidth": 4,
+  "lineWidth": 1000,
+  "newLineKind": "lf",
+  "useTabs": false,
+  "typescript": {
+    "semiColons": "always",
+    "quoteStyle": "preferDouble",
+    "quoteProps": "consistent",
+    "useBraces": "whenNotSingleLine",
+    "bracePosition": "sameLineUnlessHanging",
+    "singleBodyPosition": "sameLine",
+    "trailingCommas": "onlyMultiLine",
+    "preferHanging": false,
+    "operatorPosition": "maintain",
+    "arrowFunction.useParentheses": "preferNone",
+    "conditionalExpression.linePerExpression": false,
+    "functionExpression.spaceAfterFunctionKeyword": true,
+    "importDeclaration.forceMultiLine": "whenMultiple",
+    "constructorType.spaceAfterNewKeyword": true,
+    "constructSignature.spaceAfterNewKeyword": true,
+    "module.sortImportDeclarations": "caseInsensitive",
+    "module.sortExportDeclarations": "caseInsensitive",
+    "exportDeclaration.sortNamedExports": "caseInsensitive",
+    "importDeclaration.sortNamedImports": "caseInsensitive"
+  },
+  "json": { "indentWidth": 2, "trailingCommas": "never" },
+  "malva": {},
+  "markup": {},
+  "yaml": {
+    "indentWidth": 2,
+    "quotes": "preferSingle"
+  },
+  "excludes": [
+    "**/node_modules",
+    "pnpm-lock.yaml",
+    ".svelte-kit/**",
+    "build/**",
+    "src/lib/api/schema.d.ts",
+    "**/*.svg"
+  ],
+  "plugins": [
+    "https://plugins.dprint.dev/typescript-0.96.1.wasm",
+    "https://plugins.dprint.dev/json-0.21.3.wasm",
+    "https://plugins.dprint.dev/g-plane/malva-v0.16.0.wasm",
+    "https://plugins.dprint.dev/g-plane/markup_fmt-v0.27.3.wasm",
+    "https://plugins.dprint.dev/g-plane/pretty_yaml-v0.6.0.wasm"
+  ]
+}

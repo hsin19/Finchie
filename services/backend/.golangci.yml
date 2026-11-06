@@ -1,0 +1,38 @@
+version: "2"
+linters:
+  enable:
+    - bodyclose
+    - errorlint
+    - gocritic
+    - gosec
+    - misspell
+    - nilerr
+    - revive
+    - unconvert
+    - wrapcheck
+  settings:
+    revive:
+      enable-default-rules: true
+      rules:
+        # internal/ packages: doc comments only where they add something (AGENTS.md).
+        - name: exported
+          disabled: true
+        - name: package-comments
+          disabled: true
+    wrapcheck:
+      ignore-package-globs:
+        - github.com/hsin19/finchie/*
+        - github.com/riverqueue/river*
+  exclusions:
+    generated: strict
+    paths:
+      - internal/gen
+      - internal/db/dbq
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/hsin19/finchie

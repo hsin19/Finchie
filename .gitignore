@@ -1,1 +1,5 @@
 .coverage
+.DS_Store
+
+# Real statements, local env files, anything personal (ADR 0006)
+.local/

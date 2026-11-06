@@ -1,0 +1,141 @@
+name: Release
+
+# On a v* tag, after check.yml passes: build each image on native x64 and arm64 runners, smoke-check
+# it, and push that exact image as <version>-<arch>. Only when every build passes are the
+# linux/amd64 + linux/arm64 release tags created.
+# Image tags: v2.1.0 -> 2.1.0, 2.1, sha-<short sha>.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+# One release per tag at a time, never cancelled halfway: a half-pushed tag is worse than a late one.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  check:
+    uses: ./.github/workflows/check.yml
+
+  # Reject a malformed tag before spending time on builds.
+  meta:
+    name: Resolve version and image tags
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.tags.outputs.version }}
+      tags: ${{ steps.tags.outputs.tags }}
+    steps:
+      # Pre-releases (v2.1.0-rc.1) get no major.minor tag, so 2.1 always points at a final release.
+      - name: Resolve image tags
+        id: tags
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::Tag $GITHUB_REF_NAME is not v<major>.<minor>.<patch>[-<pre-release>]"
+            exit 1
+          fi
+          tags="$version"
+          if [[ "$version" != *-* ]]; then
+            tags="$tags;${version%.*}"
+          fi
+          tags="$tags;sha-${GITHUB_SHA::7}"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tags=$tags" >> "$GITHUB_OUTPUT"
+
+  # Each architecture has to run before it is pushed: the arm64 homelab gets the arm64 build that was
+  # smoke-checked. Nothing uses the <version>-<arch> tags until publish merges them.
+  build:
+    name: Build and smoke check (${{ matrix.app.name }}, ${{ matrix.platform.arch }})
+    needs: [check, meta]
+    runs-on: ${{ matrix.platform.runner }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        app:
+          # The backend embeds web/, so its context is the repository root.
+          - name: backend
+            image: finchie-backend
+            context: .
+          - name: parser
+            image: finchie-parser
+            context: services/parser
+        platform:
+          - arch: linux-amd64
+            runner: ubuntu-24.04
+          - arch: linux-arm64
+            runner: ubuntu-24.04-arm
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Build image
+        run: >
+          docker build "$CONTEXT"
+          --file "services/$APP/Dockerfile"
+          --tag "$IMAGE:smoke"
+          --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY"
+          --label "org.opencontainers.image.version=$VERSION"
+          --label "org.opencontainers.image.revision=$GITHUB_SHA"
+        env:
+          APP: ${{ matrix.app.name }}
+          CONTEXT: ${{ matrix.app.context }}
+          IMAGE: ${{ matrix.app.image }}
+          VERSION: ${{ needs.meta.outputs.version }}
+
+      - name: Smoke check
+        run: .github/scripts/smoke.sh "${{ matrix.app.name }}" "${{ matrix.app.image }}:smoke"
+
+      - name: Log in to GHCR
+        run: echo "$TOKEN" | docker login ghcr.io -u "$ACTOR" --password-stdin
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ACTOR: ${{ github.actor }}
+
+      - name: Push smoke-checked image
+        run: |
+          target="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/$IMAGE:$VERSION-$ARCH"
+          docker tag "$IMAGE:smoke" "$target"
+          docker push "$target"
+        env:
+          IMAGE: ${{ matrix.app.image }}
+          VERSION: ${{ needs.meta.outputs.version }}
+          ARCH: ${{ matrix.platform.arch }}
+
+  # Reached only when every build passed: one multi-arch index per image, under every release tag.
+  publish:
+    name: Merge multi-arch tags (${{ matrix.image }})
+    needs: [meta, build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        image: [finchie-backend, finchie-parser]
+
+    steps:
+      - name: Log in to GHCR
+        run: echo "$TOKEN" | docker login ghcr.io -u "$ACTOR" --password-stdin
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ACTOR: ${{ github.actor }}
+
+      - name: Merge multi-arch tags
+        run: |
+          repo="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/$IMAGE"
+          for tag in ${TAGS//;/ }; do
+            docker buildx imagetools create -t "$repo:$tag" "$repo:$VERSION-linux-amd64" "$repo:$VERSION-linux-arm64"
+          done
+        env:
+          IMAGE: ${{ matrix.image }}
+          VERSION: ${{ needs.meta.outputs.version }}
+          TAGS: ${{ needs.meta.outputs.tags }}

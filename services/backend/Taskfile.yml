@@ -1,0 +1,63 @@
+version: '3'
+
+vars:
+  IMAGE: ghcr.io/hsin19/finchie-backend
+  GOLANGCI_LINT: go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
+  # Generators run at a pinned version instead of as go.mod tools: as tools, their whole dependency
+  # trees would count as the backend's, and their advisories would block PRs for code that never ships.
+  SQLC: go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1
+  OAPI_CODEGEN: go run github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.8.2
+
+tasks:
+  generate:
+    desc: Regenerate database code (sqlc) and API code (oapi-codegen); commit the output
+    cmds:
+      - '{{.SQLC}} generate'
+      - '{{.OAPI_CODEGEN}} -config api/oapi-codegen.yaml api/openapi.yaml'
+
+  build:
+    desc: Compile everything
+    cmds:
+      - go build ./...
+
+  lint:
+    desc: golangci-lint (includes gofmt / goimports)
+    cmds:
+      - '{{.GOLANGCI_LINT}} run ./...'
+
+  fmt:
+    desc: Fix formatting
+    cmds:
+      - '{{.GOLANGCI_LINT}} fmt ./...'
+
+  test:
+    desc: Unit and integration tests (integration tests need Docker and skip without it)
+    env:
+      # Colima and similar VMs expose a host-side socket path that does not exist inside the VM.
+      TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE: /var/run/docker.sock
+    cmds:
+      - go test ./... {{.CLI_ARGS}}
+
+  check:
+    desc: Everything CI runs for the backend
+    cmds:
+      - task: lint
+      - task: test
+
+  web:
+    desc: Build the web app into internal/web/dist, so the next build or `task backend:run` serves it
+    cmds:
+      - task: :web:build
+      - find internal/web/dist -mindepth 1 ! -name .gitkeep -delete
+      - cp -R ../../web/build/. internal/web/dist/
+
+  run:
+    desc: Start the backend on :8080 (reads ../../.local/backend.env); run `task backend:web` first for the UI
+    dotenv: ['../../.local/backend.env']
+    cmds:
+      - go run ./cmd/backend
+
+  image:
+    desc: Build the container image (from the repository root, since it embeds web/)
+    cmds:
+      - docker build -f Dockerfile -t {{.IMAGE}}:dev ../..

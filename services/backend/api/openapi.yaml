@@ -1,0 +1,339 @@
+openapi: 3.0.3
+info:
+  title: Finchie API
+  version: 2.0.0
+  description: |
+    Upload statements and read what was parsed from them. Amounts are decimal strings
+    and dates on statements are calendar dates (ADR 0004).
+
+paths:
+  /api/documents:
+    post:
+      operationId: uploadDocument
+      summary: Upload an e-mail (.eml) or PDF statement and queue it for parsing
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "201":
+          description: Stored and queued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Document" }
+        "200":
+          description: The same bytes were uploaded before; nothing changed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Document" }
+        "400":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+    get:
+      operationId: listDocuments
+      summary: Uploaded documents, newest first
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Documents
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Document" }
+
+  /api/documents/{id}:
+    get:
+      operationId: getDocument
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: The document
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Document" }
+        "404":
+          $ref: "#/components/responses/Problem"
+
+  /api/documents/{id}/reparse:
+    post:
+      operationId: reparseDocument
+      summary: Parse the stored original again, e.g. after a parser fix
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "202":
+          description: Queued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Document" }
+        "404":
+          $ref: "#/components/responses/Problem"
+
+  /api/documents/{id}/content:
+    get:
+      operationId: getDocumentContent
+      summary: The original file exactly as uploaded
+      description: |
+        PDFs open in the browser (inline); everything else downloads (attachment). The file is served
+        from the web app's own origin, so nothing a browser could run as a page is ever shown in place.
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: The stored bytes, with the content type detected at upload
+          headers:
+            Content-Disposition:
+              schema: { type: string }
+            X-Content-Type-Options:
+              schema: { type: string, enum: [nosniff] }
+          content:
+            "*/*":
+              schema:
+                type: string
+                format: binary
+        "404":
+          $ref: "#/components/responses/Problem"
+
+  /api/statements:
+    get:
+      operationId: listStatements
+      summary: Parsed statements, newest closing date first
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Statements
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Statement" }
+
+  /api/statements/{id}:
+    get:
+      operationId: getStatement
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: The statement
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Statement" }
+        "404":
+          $ref: "#/components/responses/Problem"
+
+  /api/statements/{id}/transactions:
+    get:
+      operationId: listStatementTransactions
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Transactions in statement order
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Transaction" }
+        "404":
+          $ref: "#/components/responses/Problem"
+
+  /api/transactions:
+    get:
+      operationId: searchTransactions
+      summary: Transactions across every statement, newest first, with totals for the whole match
+      description: |
+        Filters combine with AND. `total` and `sum` cover every matching row, not just this page.
+        `byKind` and `byCard` are facets: each ignores its own filter (byKind ignores `kind`, byCard
+        ignores `institution` and `card`), so a picker can show the options it would switch to.
+      parameters:
+        - name: from
+          in: query
+          description: First transaction date, inclusive
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          description: Last transaction date, inclusive
+          schema: { type: string, format: date }
+        - name: kind
+          in: query
+          style: form
+          explode: true
+          schema:
+            type: array
+            items: { $ref: "#/components/schemas/TransactionKind" }
+        - name: institution
+          in: query
+          schema: { type: string }
+        - name: card
+          in: query
+          description: Last four digits of the card
+          schema: { type: string }
+        - name: overseas
+          in: query
+          description: Only rows charged in a foreign currency or in another country
+          schema: { type: boolean }
+        - name: q
+          in: query
+          description: Case-insensitive substring of the description
+          schema: { type: string }
+        - name: limit
+          in: query
+          description: Page size; 0 returns only the totals
+          schema: { type: integer, minimum: 0, maximum: 500, default: 100 }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        "200":
+          description: One page of matches and the totals
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TransactionSearch" }
+
+components:
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema: { type: integer, format: int64 }
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 500, default: 100 }
+
+  responses:
+    Problem:
+      description: Error
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Problem" }
+
+  schemas:
+    Decimal:
+      type: string
+      description: Decimal number as a string, e.g. "-6552.97"
+      example: "1234.50"
+
+    DocumentStatus:
+      type: string
+      enum: [pending, parsed, needs_review, duplicate, failed]
+      description: |
+        pending: queued or being parsed. parsed: reconciled. needs_review: parsed but the
+        transactions don't add up to the statement. duplicate: the same statement came from
+        another document. failed: the parser could not read it (see `error`).
+
+    Document:
+      type: object
+      required: [id, filename, contentType, sizeBytes, sha256, receivedAt, status, warnings]
+      properties:
+        id: { type: integer, format: int64 }
+        filename: { type: string }
+        contentType: { type: string }
+        sizeBytes: { type: integer }
+        sha256: { type: string, description: Hex }
+        receivedAt: { type: string, format: date-time }
+        status: { $ref: "#/components/schemas/DocumentStatus" }
+        error: { type: string }
+        parser: { type: string }
+        parserVersion: { type: string }
+        warnings:
+          type: array
+          items: { type: string }
+        parsedAt: { type: string, format: date-time }
+
+    Statement:
+      type: object
+      required: [id, documentId, institution, closingDate, dueDate, currency, totalDue, reconciliation, transactionCount]
+      properties:
+        id: { type: integer, format: int64 }
+        documentId: { type: integer, format: int64 }
+        institution: { type: string, example: taishin }
+        closingDate: { type: string, format: date }
+        dueDate: { type: string, format: date }
+        currency: { type: string, example: TWD }
+        totalDue: { $ref: "#/components/schemas/Decimal" }
+        reconciliation: { $ref: "#/components/schemas/Reconciliation" }
+        transactionCount: { type: integer }
+
+    Reconciliation:
+      type: object
+      required: [balanced, computed, stated, statedLabel]
+      properties:
+        balanced: { type: boolean }
+        computed: { $ref: "#/components/schemas/Decimal" }
+        stated: { $ref: "#/components/schemas/Decimal" }
+        statedLabel: { type: string }
+
+    TransactionKind:
+      type: string
+      enum: [purchase, foreign_transaction_fee, annual_fee, refund, rebate, payment]
+
+    Transaction:
+      type: object
+      required: [id, statementId, institution, transactionDate, description, kind, amount]
+      properties:
+        id: { type: integer, format: int64 }
+        statementId: { type: integer, format: int64 }
+        institution: { type: string }
+        transactionDate: { type: string, format: date }
+        postingDate: { type: string, format: date }
+        description: { type: string }
+        kind: { $ref: "#/components/schemas/TransactionKind" }
+        amount: { $ref: "#/components/schemas/Decimal" }
+        originalAmount: { $ref: "#/components/schemas/Decimal" }
+        originalCurrency: { type: string }
+        country: { type: string }
+        cardLast4: { type: string }
+
+    TransactionSearch:
+      type: object
+      required: [items, total, sum, byKind, byCard]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Transaction" }
+        total: { type: integer, description: Rows matching every filter }
+        sum: { $ref: "#/components/schemas/Decimal" }
+        byKind:
+          type: array
+          items: { $ref: "#/components/schemas/KindTotal" }
+        byCard:
+          type: array
+          items: { $ref: "#/components/schemas/CardTotal" }
+
+    KindTotal:
+      type: object
+      required: [kind, count, amount]
+      properties:
+        kind: { $ref: "#/components/schemas/TransactionKind" }
+        count: { type: integer }
+        amount: { $ref: "#/components/schemas/Decimal" }
+
+    CardTotal:
+      type: object
+      required: [institution, count, amount]
+      properties:
+        institution: { type: string }
+        cardLast4: { type: string, description: Absent for rows not tied to a card, such as payments }
+        count: { type: integer }
+        amount: { $ref: "#/components/schemas/Decimal" }
+
+    Problem:
+      type: object
+      required: [message]
+      properties:
+        message: { type: string }

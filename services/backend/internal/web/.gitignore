@@ -1,0 +1,3 @@
+# Filled from web/build by `task backend:web` or the Dockerfile; never committed.
+dist/*
+!dist/.gitkeep

@@ -5,19 +5,142 @@ updates:
       - "/services/*"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    groups:
+      # The generated gRPC code checks these at import time; move them together.
+      grpc:
+        patterns:
+          - "grpcio*"
+          - "protobuf"
+          - "googleapis-common-protos"
+      ocr:
+        patterns:
+          - "rapidocr"
+          - "onnxruntime"
+      non-major:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
 
   - package-ecosystem: "gomod"
     directories:
       - "/services/*"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    groups:
+      grpc:
+        patterns:
+          - "google.golang.org/*"
+      river:
+        patterns:
+          - "github.com/riverqueue/*"
+      testcontainers:
+        patterns:
+          - "github.com/testcontainers/*"
+      non-major:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
 
+  - package-ecosystem: "npm"
+    directory: "/web"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    ignore:
+      # @types/node follows the Node major in web/.node-version (an LTS line).
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+    groups:
+      # Its output is committed (web/src/lib/api/schema.d.ts), so a bump can need `task web:generate`.
+      codegen-manual:
+        patterns:
+          - "openapi-typescript"
+      svelte:
+        patterns:
+          - "svelte"
+          - "svelte-*"
+          - "@sveltejs/*"
+      vite:
+        patterns:
+          - "vite"
+          - "vitest"
+          - "@vitest/*"
+      tailwind:
+        patterns:
+          - "tailwindcss"
+          - "@tailwindcss/*"
+      eslint:
+        patterns:
+          - "eslint"
+          - "eslint-*"
+          - "@eslint/*"
+          - "typescript-eslint"
+      non-major:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # check.yml does not build images, so a green PR says nothing about a new base image; release.yml
+  # is the first to build and smoke-check it. Left for a human.
   - package-ecosystem: "docker"
+    directories:
+      - "/services/*"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    groups:
+      images-manual:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "docker-compose"
     directory: "/"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    groups:
+      compose-manual:
+        patterns:
+          - "*"
 
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    groups:
+      actions:
+        patterns:
+          - "*"

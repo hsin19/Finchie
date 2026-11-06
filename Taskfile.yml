@@ -1,16 +1,57 @@
 version: '3'
 
-includes:
-  ledger-svc:
-    taskfile: services/ledger-svc/Taskfile.yml
-    dir: services/ledger-svc
+vars:
+  BUF: go run github.com/bufbuild/buf/cmd/buf@v1.75.0
 
-  statement-fetcher:
-    taskfile: services/statement-fetcher/Taskfile.yml
-    dir: services/statement-fetcher
+includes:
+  backend:
+    taskfile: services/backend/Taskfile.yml
+    dir: services/backend
+  parser:
+    taskfile: services/parser/Taskfile.yml
+    dir: services/parser
+  web:
+    taskfile: web/Taskfile.yml
+    dir: web
 
 tasks:
-  test-all:
-    desc: Run tests for all projects
+  proto:
+    desc: Lint proto/ and regenerate Go and Python code (commit the output)
     cmds:
-      - task api:test
+      - '{{.BUF}} format -w'
+      - '{{.BUF}} lint'
+      - '{{.BUF}} generate'
+
+  proto:deps:
+    desc: Update buf.lock (googleapis)
+    cmds:
+      - '{{.BUF}} dep update'
+
+  proto:check:
+    desc: Fail on unformatted, unlinted, or backward-incompatible proto changes
+    cmds:
+      - '{{.BUF}} format --diff --exit-code'
+      - '{{.BUF}} lint'
+      - task: proto:breaking
+
+  proto:breaking:
+    desc: Fail on backward-incompatible changes against main
+    # Skipped until main has contracts to compare against.
+    status:
+      - '! git cat-file -e main:proto/finchie 2>/dev/null'
+    cmds:
+      - '{{.BUF}} breaking --against ".git#branch=main"'
+
+  shellcheck:
+    desc: Lint the repository's shell scripts
+    cmds:
+      - shellcheck .github/scripts/*.sh
+
+  check:
+    desc: Everything CI runs, except the generated-code check (it needs a clean working tree)
+    cmds:
+      - task: proto:check
+      - task: parser:check
+      - task: backend:check
+      - task: web:check
+      - task: shellcheck

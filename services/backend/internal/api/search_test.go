@@ -1,0 +1,171 @@
+package api
+
+import (
+	"net/http"
+	"strconv"
+	"testing"
+	"time"
+
+	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/hsin19/finchie/services/backend/internal/db/dbq"
+)
+
+type line struct {
+	date, description, kind, amount string
+	currency, country, card         string
+}
+
+// seedStatement stores a statement with its lines the way the ingest worker would.
+func seedStatement(t *testing.T, pool *pgxpool.Pool, institution, closing string, lines []line) int64 {
+	t.Helper()
+	ctx := t.Context()
+	queries := dbq.New(pool)
+	doc, err := queries.UpsertDocument(ctx, dbq.UpsertDocumentParams{
+		Sha256: []byte(institution + closing), Filename: institution + ".pdf", ContentType: "application/pdf", Content: []byte("%PDF"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	id, err := queries.InsertStatement(ctx, dbq.InsertStatementParams{
+		DocumentID: doc.ID, Institution: institution, ClosingDate: pgDate(t, closing), DueDate: pgDate(t, closing),
+		Currency: "TWD", TotalDue: numeric(t, "0"), ComputedNewCharges: numeric(t, "0"), StatedNewCharges: numeric(t, "0"),
+		StatedLabel: "total", Balanced: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows := make([]dbq.InsertTransactionsParams, 0, len(lines))
+	for i, l := range lines {
+		rows = append(rows, dbq.InsertTransactionsParams{
+			StatementID: id, LineNo: int32(i + 1), TransactionDate: pgDate(t, l.date), Description: l.description,
+			Kind: l.kind, Amount: numeric(t, l.amount),
+			OriginalCurrency: optional(l.currency), Country: optional(l.country), CardLast4: optional(l.card),
+		})
+	}
+	if _, err := queries.InsertTransactions(ctx, rows); err != nil {
+		t.Fatal(err)
+	}
+	return id
+}
+
+func pgDate(t *testing.T, s string) pgtype.Date {
+	t.Helper()
+	d, err := time.Parse(time.DateOnly, s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return pgtype.Date{Time: d, Valid: true}
+}
+
+func numeric(t *testing.T, s string) pgtype.Numeric {
+	t.Helper()
+	var n pgtype.Numeric
+	if err := n.Scan(s); err != nil {
+		t.Fatal(err)
+	}
+	return n
+}
+
+func optional(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
+}
+
+func seedLedger(t *testing.T, pool *pgxpool.Pool) (hsbc int64) {
+	t.Helper()
+	hsbc = seedStatement(t, pool, "hsbc", "2026-10-20", []line{
+		{"2026-10-08", "Leather Atelier Firenze", "purchase", "23104", "EUR", "IT", "4417"},
+		{"2026-10-08", "Foreign transaction fee", "foreign_transaction_fee", "346.56", "", "", "4417"},
+		{"2026-10-07", "Tax Free Refund", "refund", "-2180", "", "SE", "4417"},
+		{"2026-09-30", "Payment, thank you", "payment", "-41280", "", "", ""},
+	})
+	seedStatement(t, pool, "esun", "2026-10-07", []line{
+		{"2026-10-02", "Uber Eats", "purchase", "289", "", "TW", "3381"},
+		{"2026-10-07", "U Bear cashback", "rebate", "-35.5", "", "", "3381"},
+	})
+	return hsbc
+}
+
+func TestSearchTransactionsFiltersAndTotals(t *testing.T) {
+	e, pool := newAPI(t, 1<<20)
+	seedLedger(t, pool)
+
+	all := decode[TransactionSearch](t, get(t, e, "/api/transactions?from=2026-10-01&to=2026-10-31"))
+	if all.Total != 5 || len(all.Items) != 5 || all.Sum != "21524.06" {
+		t.Fatalf("October: total=%d items=%d sum=%s", all.Total, len(all.Items), all.Sum)
+	}
+	if first := all.Items[0]; first.Description != "Leather Atelier Firenze" || first.Institution != "hsbc" {
+		t.Fatalf("newest first, then statement line order: %+v", first)
+	}
+
+	purchases := decode[TransactionSearch](t, get(t, e, "/api/transactions?kind=purchase&kind=refund&card=4417"))
+	if purchases.Total != 2 || purchases.Sum != "20924" {
+		t.Fatalf("purchase+refund on 4417: total=%d sum=%s", purchases.Total, purchases.Sum)
+	}
+	// byKind ignores the kind filter but keeps the card filter.
+	kinds := map[TransactionKind]string{}
+	for _, k := range purchases.ByKind {
+		kinds[k.Kind] = k.Amount
+	}
+	if len(kinds) != 3 || kinds[ForeignTransactionFee] != "346.56" || kinds[Rebate] != "" {
+		t.Fatalf("byKind = %+v", purchases.ByKind)
+	}
+	// byCard ignores the card filter but keeps the kind filter.
+	if len(purchases.ByCard) != 2 || purchases.ByCard[0].Institution != "esun" || purchases.ByCard[0].Amount != "289" {
+		t.Fatalf("byCard = %+v", purchases.ByCard)
+	}
+
+	overseas := decode[TransactionSearch](t, get(t, e, "/api/transactions?overseas=true"))
+	if overseas.Total != 2 {
+		t.Fatalf("overseas total = %d, want the EUR purchase and the SE refund", overseas.Total)
+	}
+
+	search := decode[TransactionSearch](t, get(t, e, "/api/transactions?q=uber%20&limit=0"))
+	if search.Total != 1 || len(search.Items) != 0 || search.Sum != "289" {
+		t.Fatalf("q=uber limit=0: total=%d items=%d sum=%s", search.Total, len(search.Items), search.Sum)
+	}
+
+	page := decode[TransactionSearch](t, get(t, e, "/api/transactions?limit=2&offset=5"))
+	if page.Total != 6 || len(page.Items) != 1 {
+		t.Fatalf("last page: total=%d items=%d", page.Total, len(page.Items))
+	}
+
+	none := decode[TransactionSearch](t, get(t, e, "/api/transactions?from=2030-01-01"))
+	if none.Total != 0 || none.Sum != "0" || len(none.ByKind) != 0 {
+		t.Fatalf("empty match = %+v", none)
+	}
+}
+
+func TestStatementAndDocumentContent(t *testing.T) {
+	e, pool := newAPI(t, 1<<20)
+	hsbc := seedLedger(t, pool)
+
+	statement := decode[Statement](t, get(t, e, "/api/statements/"+itoa(hsbc)))
+	if statement.Institution != "hsbc" || statement.TransactionCount != 4 {
+		t.Fatalf("statement = %+v", statement)
+	}
+	lines := decode[[]Transaction](t, get(t, e, "/api/statements/"+itoa(hsbc)+"/transactions"))
+	if len(lines) != 4 || lines[0].StatementId != hsbc || lines[0].Institution != "hsbc" {
+		t.Fatalf("lines = %+v", lines)
+	}
+
+	content := get(t, e, "/api/documents/"+itoa(statement.DocumentId)+"/content")
+	if content.Code != http.StatusOK || content.Body.String() != "%PDF" ||
+		content.Header().Get("Content-Type") != "application/pdf" ||
+		content.Header().Get("Content-Disposition") != `inline; filename=hsbc.pdf` {
+		t.Fatalf("content: %d %v %q", content.Code, content.Header(), content.Body)
+	}
+	for _, path := range []string{"/api/statements/999", "/api/documents/999/content"} {
+		if got := get(t, e, path).Code; got != http.StatusNotFound {
+			t.Errorf("%s: status = %d", path, got)
+		}
+	}
+}
+
+func itoa(n int64) string {
+	return strconv.FormatInt(n, 10)
+}
