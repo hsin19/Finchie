@@ -3,13 +3,17 @@ version: '3'
 vars:
   IMAGE: ghcr.io/hsin19/finchie-backend
   GOLANGCI_LINT: go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
+  # Generators run at a pinned version instead of as go.mod tools: as tools, their whole dependency
+  # trees would count as the backend's, and their advisories would block PRs for code that never ships.
+  SQLC: go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1
+  OAPI_CODEGEN: go run github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.8.2
 
 tasks:
   generate:
     desc: Regenerate database code (sqlc) and API code (oapi-codegen); commit the output
     cmds:
-      - go tool sqlc generate
-      - go tool oapi-codegen -config api/oapi-codegen.yaml api/openapi.yaml
+      - '{{.SQLC}} generate'
+      - '{{.OAPI_CODEGEN}} -config api/oapi-codegen.yaml api/openapi.yaml'
 
   build:
     desc: Compile everything

@@ -39,13 +39,6 @@ updates:
       prefix: "chore"
       include: "scope"
     groups:
-      # Generators stamp their version into the files they write, so check.yml's "generated code is
-      # committed" job fails until someone runs `task backend:generate`. "-manual" groups are left
-      # for a human by the shared auto-merge workflow.
-      codegen-manual:
-        patterns:
-          - "github.com/sqlc-dev/sqlc"
-          - "github.com/oapi-codegen/oapi-codegen/v2"
       grpc:
         patterns:
           - "google.golang.org/*"

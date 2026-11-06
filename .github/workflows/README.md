@@ -47,7 +47,7 @@ Groups whose names end in `-manual` are left for a human (see [`../dependabot.ym
 
 | Group | Why it can't merge itself |
 |---|---|
-| `codegen-manual` (sqlc, oapi-codegen) | Generated files carry the generator version, so the generated-code check fails until `task backend:generate` is run and committed |
+| `codegen-manual` (openapi-typescript) | Its output `web/src/lib/api/schema.d.ts` is committed, so the web job's API-types check fails until `task web:generate` is run and committed |
 | `images-manual` (Dockerfile base images), `compose-manual` | `check.yml` builds no images; the first real test of a new base image is a release |
 
-Tool versions pinned in Taskfiles (`buf`, `golangci-lint`) and the buf plugin versions in `buf.gen.yaml` are not tracked by Dependabot; bump them by hand. Keep buf plugin versions at or below the runtime libraries each service pins.
+Tool versions pinned in Taskfiles (`buf`, `golangci-lint`, `sqlc`, `oapi-codegen`) and the buf plugin versions in `buf.gen.yaml` are not tracked by Dependabot; bump them by hand. Keep buf plugin versions at or below the runtime libraries each service pins.

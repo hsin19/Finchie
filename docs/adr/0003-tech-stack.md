@@ -20,7 +20,7 @@ Finchie is a side project. Trying interesting technology and practising it is an
 | Python tooling | uv, ruff, pytest | Carried over from V1 |
 | Web | TypeScript; framework chosen when work starts (SvelteKit, ADR 0007) | |
 | Deployment | Images on GHCR, homelab Docker Compose, Cloudflare Tunnel and Access | Same path as the homelab's other services |
-| Developer tools | Pinned through Go `tool` directives or `go run module@version` | Nothing to install globally besides Go, uv, Task, and Docker |
+| Developer tools | Pinned through Go `tool` directives or `go run module@version` (all through `go run` now: as `tool` directives, sqlc's and oapi-codegen's dependencies counted as the backend's and their advisories failed dependency review) | Nothing to install globally besides Go, uv, Task, and Docker |
 
 ## Alternatives considered
 
