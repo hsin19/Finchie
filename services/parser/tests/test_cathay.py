@@ -84,3 +84,26 @@ def test_cathay_reads_fees_without_country_or_currency() -> None:
         ("CUBE 卡年費優惠", Kind.ANNUAL_FEE, Decimal(0), "4321"),
     ]
     assert statement.reconciliation.balanced
+
+
+# A tax-free refund prints a negative foreign amount, and the fee charged on the purchase comes back
+# as a negative "國外退貨手續費" line.
+REFUND_PAGE = """您本月消費明細如下：
+03/12 03/14 CAFE PARIS 600 4321 FR EUR 17.50 03/12
+03/12 04/01 國外交易手續費 -CAFEPA 9 4321
+03/20 04/01 國外退貨手續費 -TAXFRE -1 4321
+03/20 03/24 TAX FREE REFUND SHOP -95 4321 FR EUR -2.80 03/22
+正卡本期消費 513
+本期應繳總額 513
+◎ 您的新臺幣帳款將於 115/04/17 (遇假日順延)之次一營業日自帳號扣款513元整
+國泰世華CUBE App"""
+
+
+def test_cathay_reads_foreign_refunds_and_fee_refunds() -> None:
+    statement = CathayParser().parse(FakeDocument([PAGE_1, REFUND_PAGE]), ocr=None).statement
+    rows = [(t.description, t.kind, t.amount, t.original_amount, t.original_currency) for t in statement.transactions]
+    assert rows[2:] == [
+        ("國外退貨手續費 -TAXFRE", Kind.FOREIGN_TRANSACTION_FEE, Decimal(-1), None, ""),
+        ("TAX FREE REFUND SHOP", Kind.REFUND, Decimal(-95), Decimal("-2.80"), "EUR"),
+    ]
+    assert statement.reconciliation.balanced

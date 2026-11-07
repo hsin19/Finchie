@@ -15,10 +15,10 @@ _DUE = re.compile(r"將於\s*(\d{3}/\d\d/\d\d)", re.ASCII)
 _NEW_CHARGES = re.compile(r"^(?:正卡|附卡)本期消費 (-?[\d,]+)$", re.ASCII)
 _TOTAL_DUE = re.compile(r"^本期應繳總額 (-?[\d,]+)$", re.ASCII)
 # "<date> <posted> <description> <amount> <card last 4> [<wallet card last 4>] <country> <currency>
-#  [<foreign amount> [<conversion date>]]"
+#  [<foreign amount> [<conversion date>]]"; a refund's foreign amount is negative too.
 _ROW = re.compile(
     r"^(?P<date>\d\d/\d\d) (?P<posted>\d\d/\d\d) (?P<desc>.+?) (?P<amt>-?[\d,]+) (?P<card>\d{4})(?: \d{4})?"
-    r" (?P<country>[A-Z]{2}) (?P<cur>[A-Z]{3})(?: (?P<orig>[\d,]+(?:\.\d+)?)(?: \d\d/\d\d)?)?$",
+    r" (?P<country>[A-Z]{2}) (?P<cur>[A-Z]{3})(?: (?P<orig>-?[\d,]+(?:\.\d+)?)(?: \d\d/\d\d)?)?$",
     re.ASCII,
 )
 # Fees and the annual fee name no country or currency:
@@ -31,7 +31,7 @@ _PAYMENT = re.compile(r"^(?P<date>\d\d/\d\d) (?P<posted>\d\d/\d\d) (?P<desc>\D+)
 
 class CathayParser(StatementParser):
     name = "cathay.credit_card"
-    version = "2"
+    version = "3"
     institution = "cathay"
     filename_pattern = re.compile(r"^信用卡電子帳單消費明細_\d+\.pdf$")
     text_marker = "國泰世華"
@@ -109,7 +109,8 @@ class CathayParser(StatementParser):
 
 
 def _plain_kind(description: str, value: Decimal) -> Kind:
-    if "國外交易手續費" in description:
+    # "國外退貨手續費": the fee on a refunded purchase, given back.
+    if "國外交易手續費" in description or "國外退貨手續費" in description:
         return Kind.FOREIGN_TRANSACTION_FEE
     if "年費" in description:
         return Kind.ANNUAL_FEE
