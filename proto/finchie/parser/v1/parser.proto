@@ -74,8 +74,10 @@ message File {
   bytes content = 3;
   // A PDF that none of the configured passwords opens, returned as received.
   bool locked = 4;
-  // The one file that stands for the document: the PDF whose name a bank
-  // parser knows as its statement, else the first PDF. None without a PDF.
+  // The one file that stands for the document: the PDF that parsing would
+  // pick as the statement (a known name whose text carries the bank's marker,
+  // else any PDF a parser recognizes by its text), else the first PDF. None
+  // without a PDF.
   bool primary = 5;
 }
 

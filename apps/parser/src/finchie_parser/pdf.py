@@ -4,7 +4,6 @@ import io
 import threading
 from collections.abc import Sequence
 from dataclasses import dataclass
-from functools import cache
 from types import TracebackType
 from typing import Protocol, Self
 
@@ -33,7 +32,9 @@ class Document(Protocol):
 
     filename: str
 
-    def page_texts(self) -> list[str]: ...
+    def page_texts(self, limit: int | None = None) -> list[str]:
+        """The text of every page, or of the first `limit` pages."""
+        ...
 
     def page_lines(self, page_index: int) -> list[TextLine]: ...
 
@@ -46,10 +47,14 @@ class PdfDocument:
         self._data = data
         self._plumber = pdfplumber.open(io.BytesIO(data))
         self._pdfium: pypdfium2.PdfDocument | None = None
-        self.page_texts = cache(self._page_texts)
+        # Extracted on demand, in page order: recognizing a statement reads only its first pages.
+        self._texts: list[str] = []
 
-    def _page_texts(self) -> list[str]:
-        return [page.extract_text() or "" for page in self._plumber.pages]
+    def page_texts(self, limit: int | None = None) -> list[str]:
+        pages = self._plumber.pages[:limit]
+        for page in pages[len(self._texts) :]:
+            self._texts.append(page.extract_text() or "")
+        return self._texts[: len(pages)]
 
     def page_lines(self, page_index: int) -> list[TextLine]:
         lines = self._plumber.pages[page_index].extract_text_lines(return_chars=False)
@@ -81,8 +86,44 @@ class PdfDocument:
         self.close()
 
 
-def open_pdf(attachment: Attachment, passwords: Sequence[str]) -> PdfDocument:
-    return PdfDocument(attachment.filename, decrypt(attachment, passwords))
+class PdfSet:
+    """One document's PDFs, each decrypted and opened at most once, and closed together."""
+
+    def __init__(self, attachments: Sequence[Attachment], passwords: Sequence[str]) -> None:
+        self.attachments = list(attachments)
+        self._passwords = passwords
+        self._decrypted: dict[int, bytes | PasswordRequiredError | InvalidDocumentError] = {}
+        self._opened: dict[int, PdfDocument] = {}
+
+    def __len__(self) -> int:
+        return len(self.attachments)
+
+    def decrypted(self, index: int) -> bytes:
+        """As `decrypt`. A PDF that fails raises its error again on every later call."""
+        if index not in self._decrypted:
+            try:
+                self._decrypted[index] = decrypt(self.attachments[index], self._passwords)
+            except (PasswordRequiredError, InvalidDocumentError) as error:
+                self._decrypted[index] = error
+        result = self._decrypted[index]
+        if isinstance(result, bytes):
+            return result
+        raise result
+
+    def open(self, index: int) -> PdfDocument:
+        if index not in self._opened:
+            self._opened[index] = PdfDocument(self.attachments[index].filename, self.decrypted(index))
+        return self._opened[index]
+
+    def close(self) -> None:
+        for document in self._opened.values():
+            document.close()
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(self, *_: type[BaseException] | BaseException | TracebackType | None) -> None:
+        self.close()
 
 
 def decrypt(attachment: Attachment, passwords: Sequence[str]) -> bytes:

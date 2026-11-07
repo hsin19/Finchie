@@ -46,6 +46,20 @@ func TestConvertRejectsResponsesThatBreakTheContract(t *testing.T) {
 			s.Transactions[0].Kind = parserv1.TransactionKind_TRANSACTION_KIND_UNSPECIFIED
 		},
 		"missing reconciliation": func(s *parserv1.Statement) { s.Reconciliation = nil },
+		"NaN amount":             func(s *parserv1.Statement) { s.Transactions[0].Amount = &decimal.Decimal{Value: "NaN"} },
+		"infinite total due":     func(s *parserv1.Statement) { s.TotalDue = &decimal.Decimal{Value: "Infinity"} },
+		"negative infinite original amount": func(s *parserv1.Statement) {
+			s.Transactions[0].OriginalAmount = &decimal.Decimal{Value: "-Infinity"}
+		},
+		"month 13": func(s *parserv1.Statement) { s.ClosingDate = &date.Date{Year: 2026, Month: 13, Day: 1} },
+		"day 0":    func(s *parserv1.Statement) { s.DueDate = &date.Date{Year: 2026, Month: 11} },
+		"February 30": func(s *parserv1.Statement) {
+			s.Transactions[0].TransactionDate = &date.Date{Year: 2026, Month: 2, Day: 30}
+		},
+		"posting date April 31": func(s *parserv1.Statement) {
+			s.Transactions[0].PostingDate = &date.Date{Year: 2026, Month: 4, Day: 31}
+		},
+		"posting date without a year": func(s *parserv1.Statement) { s.Transactions[0].PostingDate = &date.Date{Month: 10, Day: 9} },
 	}
 	for name, breakIt := range cases {
 		t.Run(name, func(t *testing.T) {

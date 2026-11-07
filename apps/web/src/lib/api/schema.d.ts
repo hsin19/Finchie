@@ -64,8 +64,9 @@ export interface paths {
         };
         /**
          * The original file exactly as uploaded
-         * @description PDFs open in the browser (inline); everything else downloads (attachment). The file is served
-         *     from the web app's own origin, so nothing a browser could run as a page is ever shown in place.
+         * @description PDFs open in the browser (inline); everything else downloads (attachment) as
+         *     application/octet-stream. The file is served from the web app's own origin, so nothing a
+         *     browser could run as a page is ever shown in place.
          */
         get: operations["getDocumentContent"];
         put?: never;
@@ -86,7 +87,8 @@ export interface paths {
         /**
          * The document opened for reading
          * @description An e-mail's headers and attachments, or a bare PDF as its one file. The parser opens the stored
-         *     original on every request and PDFs come back decrypted; nothing decrypted is stored (ADR 0012).
+         *     original on every request and PDFs come back decrypted; nothing decrypted is stored (ADR 0012),
+         *     so the PDF, body, and file responses carry `Cache-Control: no-store`.
          */
         get: operations["getDocumentPreview"];
         put?: never;
@@ -546,7 +548,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The stored bytes, with the content type detected at upload */
+            /** @description The stored bytes */
             200: {
                 headers: {
                     "Content-Disposition"?: string;
@@ -599,6 +601,7 @@ export interface operations {
             /** @description The PDF */
             200: {
                 headers: {
+                    "Cache-Control"?: "no-store";
                     "Content-Disposition"?: string;
                     "X-Content-Type-Options"?: "nosniff";
                     [name: string]: unknown;
@@ -626,6 +629,7 @@ export interface operations {
             /** @description The body */
             200: {
                 headers: {
+                    "Cache-Control"?: "no-store";
                     "Content-Security-Policy"?: string;
                     "Referrer-Policy"?: "no-referrer";
                     "X-Content-Type-Options"?: "nosniff";
@@ -655,6 +659,7 @@ export interface operations {
             /** @description The file */
             200: {
                 headers: {
+                    "Cache-Control"?: "no-store";
                     "Content-Disposition"?: string;
                     "X-Content-Type-Options"?: "nosniff";
                     [name: string]: unknown;

@@ -18,7 +18,9 @@ class Settings(BaseSettings):
 
     host: str = "[::]"
     port: int = 50051
-    workers: int = 2
+    # One thread pool serves ParseDocument, OpenDocument, and health checks. It must exceed the backend's
+    # BACKEND_PARSE_CONCURRENCY (2): parses that fill it starve previews and the 3-second healthcheck.
+    workers: int = 4
     # Must exceed the backend's BACKEND_MAX_UPLOAD_MB (32): a request carries the whole file plus its
     # other fields. The backend allows itself the same 1 MiB of headroom when sending.
     max_message_mb: int = 33

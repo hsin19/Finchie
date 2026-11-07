@@ -11,7 +11,7 @@ The web app is a SvelteKit single-page app in `apps/web/`, embedded in the backe
 | Serving | The backend embeds `apps/web/build` with `go:embed` and answers every non-API GET with `200.html` | One image, one origin: no CORS, one Access application, the UI and API always ship the same version |
 | API client | `openapi-typescript` types from `apps/backend/api/openapi.yaml`, called through `openapi-fetch` | The same contract-first path as the Go handlers; the generated file is committed and CI fails when it drifts |
 | Data loading | Universal `load` functions; every filter lives in the URL | A filtered view can be bookmarked, and Back undoes a filter |
-| Live status | The layout polls while any document is `pending` | Parsing takes seconds; polling is simpler than a push channel |
+| Live status | The layout polls while any document is `pending` (backing off from 1.5 s to 15 s, and pausing while the tab is hidden) | Parsing takes seconds; polling is simpler than a push channel |
 | Money | Decimal strings added as scaled `BigInt`s (`apps/web/src/lib/money.ts`) | ADR 0004 holds in the browser too; floating point only sizes bars |
 | Styling | Tailwind v4; design tokens in `@theme` in `apps/web/src/routes/layout.css` | |
 | Fonts | JetBrains Mono and Noto Sans TC, self-hosted through Fontsource | No requests to third-party font hosts; Noto's unicode-range subsets load only the characters a page uses |

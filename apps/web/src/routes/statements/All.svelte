@@ -109,7 +109,7 @@ async function reparse(id: number) {
                 </div>
                 <span class="text-[12px] text-mute">{formatBytes(doc.sizeBytes)} · {shortDateTime(doc.receivedAt)}</span>
                 {#if documentStatus(doc) === "failed"}
-                    <button type="button" class="control min-h-8" onclick={() => void reparse(doc.id)}><span class="text-accent">[r]</span> 重新解析</button>
+                    <button type="button" class="control min-h-8" onclick={() => void reparse(doc.id)}>重新解析</button>
                 {/if}
             </div>
         {/each}

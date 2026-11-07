@@ -3,32 +3,48 @@ import time
 
 import pypdfium2
 import pytest
-from pdfs import blank_pdf
+from pdfs import blank_pdf, text_pdf
 from PIL import Image
 
 from finchie_parser.documents import Attachment
 from finchie_parser.errors import InvalidDocumentError, PasswordRequiredError
-from finchie_parser.pdf import open_pdf
+from finchie_parser.pdf import PdfSet
+
+
+def one_pdf(data: bytes, passwords: list[str]) -> PdfSet:
+    return PdfSet([Attachment("a.pdf", data)], passwords)
 
 
 def test_unencrypted_pdf_opens_without_passwords() -> None:
-    with open_pdf(Attachment("a.pdf", blank_pdf()), []) as document:
-        assert document.page_texts() == [""]
+    with one_pdf(blank_pdf(), []) as pdfs:
+        assert pdfs.open(0).page_texts() == [""]
 
 
 def test_encrypted_pdf_opens_with_any_configured_password() -> None:
-    with open_pdf(Attachment("a.pdf", blank_pdf("right")), ["wrong", "right"]) as document:
-        assert len(document.page_texts()) == 1
+    with one_pdf(blank_pdf("right"), ["wrong", "right"]) as pdfs:
+        assert len(pdfs.open(0).page_texts()) == 1
 
 
-def test_encrypted_pdf_without_a_matching_password_is_rejected() -> None:
-    with pytest.raises(PasswordRequiredError):
-        open_pdf(Attachment("a.pdf", blank_pdf("right")), ["wrong"])
+@pytest.mark.parametrize(
+    ("data", "error"),
+    [(blank_pdf("right"), PasswordRequiredError), (b"%PDF-1.7 truncated", InvalidDocumentError)],
+    ids=["locked", "corrupt"],
+)
+def test_a_pdf_that_cannot_be_opened_says_why_every_time(data: bytes, error: type[Exception]) -> None:
+    with one_pdf(data, ["wrong"]) as pdfs:
+        for _ in range(2):
+            with pytest.raises(error):
+                pdfs.open(0)
+            with pytest.raises(error):
+                pdfs.decrypted(0)
 
 
-def test_corrupt_pdf_is_invalid() -> None:
-    with pytest.raises(InvalidDocumentError):
-        open_pdf(Attachment("a.pdf", b"%PDF-1.7 truncated"), [])
+def test_page_texts_reads_every_page_or_the_first_few() -> None:
+    with one_pdf(text_pdf("first", "second", "third"), []) as pdfs:
+        document = pdfs.open(0)
+        assert document.page_texts(1) == ["first"]
+        assert document.page_texts() == ["first", "second", "third"]
+        assert document.page_texts(2) == ["first", "second"]
 
 
 class _Concurrency:
@@ -82,7 +98,8 @@ def test_pdfium_is_never_called_from_two_threads_at_once(monkeypatch: pytest.Mon
     start = threading.Barrier(4)
 
     def parse_one() -> None:
-        with open_pdf(Attachment("a.pdf", blank_pdf()), []) as document:
+        with one_pdf(blank_pdf(), []) as pdfs:
+            document = pdfs.open(0)
             start.wait()
             document.render(0, 1.0)
 

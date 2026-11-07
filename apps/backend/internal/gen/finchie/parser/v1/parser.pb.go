@@ -378,8 +378,10 @@ type File struct {
 	Content     []byte `protobuf:"bytes,3,opt,name=content,proto3" json:"content,omitempty"`
 	// A PDF that none of the configured passwords opens, returned as received.
 	Locked bool `protobuf:"varint,4,opt,name=locked,proto3" json:"locked,omitempty"`
-	// The one file that stands for the document: the PDF whose name a bank
-	// parser knows as its statement, else the first PDF. None without a PDF.
+	// The one file that stands for the document: the PDF that parsing would
+	// pick as the statement (a known name whose text carries the bank's marker,
+	// else any PDF a parser recognizes by its text), else the first PDF. None
+	// without a PDF.
 	Primary       bool `protobuf:"varint,5,opt,name=primary,proto3" json:"primary,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

@@ -142,12 +142,16 @@ func convert(documentID int64, s *parserv1.Statement) (dbq.InsertStatementParams
 			LineNo:           int32(i),
 			Description:      t.GetDescription(),
 			Kind:             kind,
-			PostingDate:      optionalDate(t.GetPostingDate()),
 			OriginalCurrency: optionalString(t.GetOriginalCurrency()),
 			Country:          optionalString(t.GetCountry()),
 			CardLast4:        optionalString(t.GetCardLast4()),
 		}
 		row.TransactionDate, errs = requiredDate(t.GetTransactionDate(), fmt.Sprintf("transaction %d date", i), errs)
+		posting, err := optionalDate(t.GetPostingDate())
+		if err != nil {
+			errs = append(errs, fmt.Errorf("transaction %d posting date: %w", i, err))
+		}
+		row.PostingDate = posting
 		row.Amount, errs = requiredNumeric(t.GetAmount(), fmt.Sprintf("transaction %d amount", i), errs)
 		original, err := numeric(t.GetOriginalAmount())
 		if err != nil {
@@ -164,21 +168,28 @@ func convert(documentID int64, s *parserv1.Statement) (dbq.InsertStatementParams
 }
 
 func requiredDate(d *date.Date, field string, errs []error) (pgtype.Date, []error) {
-	value := optionalDate(d)
-	if !value.Valid {
+	value, err := optionalDate(d)
+	if err != nil {
+		errs = append(errs, fmt.Errorf("%s: %w", field, err))
+	} else if !value.Valid {
 		errs = append(errs, fmt.Errorf("%s is missing", field))
 	}
 	return value, errs
 }
 
-func optionalDate(d *date.Date) pgtype.Date {
-	if d == nil || d.GetYear() == 0 {
-		return pgtype.Date{}
+// optionalDate takes an unset or all-zero date as none. Anything else must be a whole calendar date
+// within google.type.Date's years: time.Date would quietly roll 2026-02-30 over into March, and a
+// missing month or day into the one before.
+func optionalDate(d *date.Date) (pgtype.Date, error) {
+	year, month, day := int(d.GetYear()), time.Month(d.GetMonth()), int(d.GetDay())
+	if year == 0 && month == 0 && day == 0 {
+		return pgtype.Date{}, nil
 	}
-	return pgtype.Date{
-		Time:  time.Date(int(d.GetYear()), time.Month(d.GetMonth()), int(d.GetDay()), 0, 0, 0, 0, time.UTC),
-		Valid: true,
+	t := time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
+	if year < 1 || year > 9999 || t.Month() != month || t.Day() != day {
+		return pgtype.Date{}, fmt.Errorf("%04d-%02d-%02d is not a date", year, month, day)
 	}
+	return pgtype.Date{Time: t, Valid: true}, nil
 }
 
 func requiredNumeric(d *decimal.Decimal, field string, errs []error) (pgtype.Numeric, []error) {
@@ -198,6 +209,11 @@ func numeric(d *decimal.Decimal) (pgtype.Numeric, error) {
 	}
 	if err := value.Scan(d.GetValue()); err != nil {
 		return pgtype.Numeric{}, fmt.Errorf("decimal %q: %w", d.GetValue(), err)
+	}
+	// A NUMERIC column takes NaN and infinities, but no amount is one, and the API's totals add
+	// amounts assuming they are finite.
+	if value.NaN || value.InfinityModifier != pgtype.Finite {
+		return pgtype.Numeric{}, fmt.Errorf("decimal %q is not a finite number", d.GetValue())
 	}
 	return value, nil
 }

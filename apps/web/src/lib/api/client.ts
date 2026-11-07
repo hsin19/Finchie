@@ -51,6 +51,11 @@ export function need<R extends Result>(result: R): Data<R> {
     return result.data as Data<R>;
 }
 
+/** For load functions whose page is still of use without this response: its data, or why it failed. */
+export function attempt<R extends Result>(result: R): { data: Data<R>; error?: undefined; } | { data?: undefined; error: string; } {
+    return result.data === undefined ? { error: message(result) } : { data: result.data as Data<R> };
+}
+
 /** For event handlers: an error response becomes an Error to show next to the control. */
 export function unwrap<R extends Result>(result: R): Data<R> {
     if (result.data === undefined) throw new Error(message(result));

@@ -4,7 +4,7 @@
 
 ```
 check.yml    push to main · workflow_call · workflow_dispatch
-             → proto (format, lint, breaking) · generated code · parser · backend · web · shellcheck
+             → proto (format, lint, breaking) · generated code · parser · backend · web · mailbox · shellcheck
 pr.yml       pull_request → check.yml · dependency review → auto-merge (Dependabot)
 release.yml  v* tag       → check.yml → build each image on x64 + arm64 runners, smoke-check → push to GHCR
 ```
@@ -13,23 +13,25 @@ release.yml  v* tag       → check.yml → build each image on x64 + arm64 runn
 
 | Job | What it guards |
 |---|---|
-| Proto contracts | `buf format`, `buf lint`, and `buf breaking` against `main` (skipped until `main` has contracts) |
+| Proto contracts | `buf format`, `buf lint`, and `buf breaking`: against `main` on a PR, against the commit before the push on `main`. Not on release tags (their commit was compared when it reached `main`), nor while the baseline has no contracts. Locally `task proto:breaking` compares against `main`, or `AGAINST=<ref>` |
 | Generated code is committed | Regenerates proto, sqlc, and oapi-codegen output; fails if anything differs from the commit |
 | Parser | ruff, then pytest on synthetic fixtures. Real statements are never in CI (ADR 0006) |
 | Backend | build, golangci-lint, then tests. Integration tests start Postgres with testcontainers on the runner's Docker |
 | Web | API types match `openapi.yaml`, dprint, ESLint, svelte-check, Vitest, then the production build |
+| Mailbox | dprint, tsc, Vitest, then a bundle with `wrangler deploy --dry-run`. Deploys stay by hand (ADR 0010) |
 | Shell scripts | shellcheck on `.github/scripts/` |
 
 Within a job, each check is its own step gated on `!cancelled()`, so one run shows every failure instead of stopping at the first.
 
 ## Release
 
-Push a tag: `git tag v2.0.0 && git push origin v2.0.0`. Images are `ghcr.io/<owner>/finchie-backend` and `ghcr.io/<owner>/finchie-parser`, tagged `2.0.0`, `2.0` (not for pre-releases such as `v2.0.0-rc.1`), and `sha-<short sha>`.
+Push a tag: `git tag v2.0.0 && git push origin v2.0.0`. Images are `ghcr.io/<owner>/finchie-backend` and `ghcr.io/<owner>/finchie-parser`, tagged `2.0.0`, `sha-<short sha>`, and `2.0` when it is the highest final `v2.0.*` tag (so neither a pre-release such as `v2.0.0-rc.1` nor an older patch released late takes it).
 
 - Each image is built from its app's `Dockerfile` on a native runner per architecture (`ubuntu-24.04`, `ubuntu-24.04-arm`). The backend's build context is the repository root, because it builds and embeds `apps/web/`.
 - [`../scripts/smoke.sh`](../scripts/smoke.sh) then starts it the way production does, without secrets: the parser has to report gRPC health `SERVING`; the backend gets a throwaway Postgres 18, runs its migrations, has to answer `/healthz`, and has to serve the embedded web app. Run it locally the same way: `.github/scripts/smoke.sh backend finchie-backend:dev`.
 - The image that passed is pushed as `<version>-<arch>` (e.g. `2.0.0-linux-arm64`); what is pushed is what ran.
 - Only when all four builds pass does `publish` merge the two architectures into one index with `docker buildx imagetools create` and point every release tag at it. A failed release can leave `<version>-<arch>` tags behind, but never a release tag; deployments use release tags only.
+- `publish` runs one release at a time per image, queued across tags, so two releases of one line cannot move its `major.minor` tag out of order.
 - New GHCR packages are private. Make them public once in the package settings, or grant the deploying repository read access. The `org.opencontainers.image.source` label links each package to this repository.
 
 ## Dependency review

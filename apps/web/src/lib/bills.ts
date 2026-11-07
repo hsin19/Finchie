@@ -1,7 +1,10 @@
 // A month's bill is the statements that closed in it, one per bank. Its amount is what those
 // statements say is due: for a card paid in full every month, that month's net charges.
 
-import type { Statement } from "#lib/api/client.js";
+import type {
+    Statement,
+    TransactionSearch,
+} from "#lib/api/client.js";
 import {
     type Month,
     monthOf,
@@ -50,6 +53,17 @@ export function pendingInstitutions(statements: readonly Statement[], month: Mon
 export function percentChange(after: string, before: string): number | undefined {
     const base = approx(before);
     return base > 0 ? ((approx(after) - base) / base) * 100 : undefined;
+}
+
+/**
+ * Foreign transaction fees as a percent of overseas purchases, given purchase searches of all lines
+ * and of overseas ones. Purchases count as printed (the kind facet), not as the search's sum, which
+ * nets refunds and fees into them (ADR 0009): a booking refunded in full would leave its fee as 100%.
+ */
+export function fxFeeShare(all: TransactionSearch, overseas: TransactionSearch): { percent: number; of: string; } | undefined {
+    const fee = all.byKind.find(k => k.kind === "foreign_transaction_fee")?.amount ?? "0";
+    const purchases = overseas.byKind.find(k => k.kind === "purchase")?.amount ?? "0";
+    return approx(purchases) > 0 ? { percent: (approx(fee) / approx(purchases)) * 100, of: purchases } : undefined;
 }
 
 export interface MonthBill {

@@ -81,7 +81,7 @@ Local configuration and secrets go in `.local/` (gitignored):
 
 ## CI and releases
 
-GitHub Actions in [`.github/workflows/`](.github/workflows/README.md): `check.yml` runs on PRs, pushes to `main`, and releases. Pushing a `v*` tag (`git tag v2.0.0 && git push origin v2.0.0`) builds both images for `linux/amd64` and `linux/arm64`, smoke-checks each, and publishes `ghcr.io/hsin19/finchie-backend` and `ghcr.io/hsin19/finchie-parser` tagged `2.0.0`, `2.0`, and `sha-<short sha>`.
+GitHub Actions in [`.github/workflows/`](.github/workflows/README.md): `check.yml` runs on PRs, pushes to `main`, and releases. Pushing a `v*` tag (`git tag v2.0.0 && git push origin v2.0.0`) builds both images for `linux/amd64` and `linux/arm64`, smoke-checks each, and publishes `ghcr.io/hsin19/finchie-backend` and `ghcr.io/hsin19/finchie-parser` tagged `2.0.0`, `2.0` (moved only when this is the highest `2.0.x` release), and `sha-<short sha>`.
 
 ## Deployment
 

@@ -22,6 +22,13 @@ import {
     net,
     refundedInFull,
 } from "#lib/family.js";
+import {
+    type FilterChanges,
+    pageCount,
+    readFilters,
+    searchPeriod,
+} from "#lib/filters.js";
+import { composing } from "#lib/keys.js";
 import { onKeys } from "#lib/keys.svelte.js";
 import {
     cardLabel,
@@ -35,7 +42,11 @@ import {
     formatAmount,
     sum,
 } from "#lib/money.js";
-import { goto } from "$app/navigation";
+import { QueryRequests } from "#lib/requests.svelte.js";
+import {
+    afterNavigate,
+    goto,
+} from "$app/navigation";
 import { resolve } from "$app/paths";
 import { page } from "$app/state";
 import type { PageProps } from "./$types";
@@ -48,12 +59,14 @@ const documents = $derived(new Map(data.documents.map(d => [d.id, d])));
 
 // ---- URL-backed filters
 
-function navigate(changes: Record<string, string | string[] | null>, { replace = false, keepPage = false } = {}) {
-    const dropped = [...Object.keys(changes), ...(keepPage ? [] : ["page"])];
-    const kept = [...page.url.searchParams].filter(([key]) => !dropped.includes(key));
-    const added = Object.entries(changes).flatMap(([key, value]) => (value === null ? [] : [value].flat()).filter(v => v !== "").map(v => [key, v]));
-    const query = new URLSearchParams([...kept, ...added]).toString();
-    return goto(query ? resolve(`/transactions?${query}`) : resolve("/transactions"), { reset: false, replace });
+// Controls show, and changes build on, the filters as last asked for, not as last loaded.
+const requests = new QueryRequests(() => page.url.searchParams);
+afterNavigate(() => requests.settle());
+const filters = $derived(readFilters(requests.params));
+
+function navigate(changes: FilterChanges, { replace = false, reset = false } = {}) {
+    const next = requests.request(changes, { replace });
+    return goto(next.query ? resolve(`/transactions?${next.query}`) : resolve("/transactions"), { reset, replace: next.replace });
 }
 
 // Search applies while typing, a moment after the last key. The box follows the URL (Back, [t], the
@@ -80,7 +93,7 @@ $effect(() => () => clearTimeout(searchTimer));
 function sendSearch() {
     clearTimeout(searchTimer);
     const q = search.trim();
-    if (q === urlQuery) return;
+    if (q === filters.q) return;
     sentQuery = q;
     void navigate({ q: q || null }, { replace: true });
 }
@@ -89,6 +102,7 @@ function onSearchInput() {
     searchTimer = setTimeout(sendSearch, 250);
 }
 function onSearchKeydown(event: KeyboardEvent) {
+    if (composing(event)) return;
     if (event.key === "Escape") {
         search = "";
         sendSearch();
@@ -101,7 +115,7 @@ function onSearchKeydown(event: KeyboardEvent) {
 }
 
 // No kind filter means every kind. Toggling one off from "all" keeps the rest.
-const activeKinds = $derived(new Set<TransactionKind>(data.filters.kinds.length > 0 ? data.filters.kinds : kindOrder));
+const activeKinds = $derived(new Set<TransactionKind>(filters.kinds.length > 0 ? filters.kinds : kindOrder));
 function toggleKind(kind: TransactionKind) {
     const next = kindOrder.filter(k => (k === kind ? !activeKinds.has(k) : activeKinds.has(k)));
     const all = next.length === 0 || next.length === kindOrder.length;
@@ -121,7 +135,7 @@ const cardOptions = $derived.by(() => {
     }
     return options;
 });
-const cardValue = $derived(data.filters.institution ? `${data.filters.institution}${data.filters.card ? `:${data.filters.card}` : ""}` : "");
+const cardValue = $derived(filters.institution ? `${filters.institution}${filters.card ? `:${filters.card}` : ""}` : "");
 
 // ---- Selection and detail
 
@@ -162,20 +176,20 @@ function statementLabel(statementId: number) {
     return statement ? `${institution(statement.institution).name} ${monthOf(statement.closingDate)}` : `#${statementId}`;
 }
 
-// ---- Paging
+// ---- Paging: a new page starts at its top.
 
-const first = $derived(data.result.total === 0 ? 0 : (data.pageNumber - 1) * PAGE_SIZE + 1);
-const last = $derived((data.pageNumber - 1) * PAGE_SIZE + items.length);
-const pages = $derived(Math.max(1, Math.ceil(data.result.total / PAGE_SIZE)));
+const first = $derived(data.result.total === 0 ? 0 : (data.filters.page - 1) * PAGE_SIZE + 1);
+const last = $derived((data.filters.page - 1) * PAGE_SIZE + items.length);
+const pages = $derived(pageCount(data.result.total));
 function goPage(n: number) {
-    if (n < 1 || n > pages || n === data.pageNumber) return;
+    if (n < 1 || n > pages || n === filters.page) return;
     selectedId = undefined;
-    void navigate({ page: n === 1 ? null : String(n) }, { keepPage: true });
+    void navigate({ page: n === 1 ? null : String(n) }, { reset: true });
 }
 
 // ---- Sort: by date or by amount; clicking the active one flips its direction.
 
-const byDate = $derived(data.sort === "newest" || data.sort === "oldest");
+const byDate = $derived(filters.sort === "newest" || filters.sort === "oldest");
 const sortTitles: Record<TransactionSort, string> = { newest: "新到舊", oldest: "舊到新", largest: "大筆在前", smallest: "小筆在前" };
 function setSort(sort: TransactionSort) {
     selectedId = undefined;
@@ -215,8 +229,8 @@ onKeys({
         sheet = false;
     },
     "Escape": () => (selectedId = undefined),
-    "n": () => goPage(data.pageNumber + 1),
-    "p": () => goPage(data.pageNumber - 1),
+    "n": () => goPage(filters.page + 1),
+    "p": () => goPage(filters.page - 1),
     "/": () => document.getElementById("q")?.focus(),
 });
 </script>
@@ -309,10 +323,10 @@ onKeys({
         <span class="hidden text-[12px] text-mute sm:inline"><span class="text-accent">[esc]</span> 清除</span>
     </div>
     <div class="flex flex-wrap items-center gap-2">
-        <MonthSelect all months={data.months} value={data.period} onchange={m => void navigate({ m })} />
-        {#if data.filters.closing}
+        <MonthSelect all months={data.months} value={searchPeriod(filters, data.latestMonth)} onchange={m => void navigate({ m })} />
+        {#if filters.closing}
             <button type="button" class="control pressed" title="移除這個篩選" onclick={() => void navigate({ closing: null })}>
-                {data.filters.closing} 結帳的帳單 <span class="text-mute">×</span>
+                {filters.closing} 結帳的帳單 <span class="text-mute">×</span>
             </button>
         {/if}
         <select class="control" aria-label="卡片" value={cardValue} onchange={event => void navigate({ card: event.currentTarget.value || null })}>
@@ -331,7 +345,7 @@ onKeys({
             {/each}
         </div>
         <label class="flex min-h-9 items-center gap-1.5 text-dim">
-            <input type="checkbox" class="accent-accent" checked={data.filters.overseas} onchange={event => void navigate({ overseas: event.currentTarget.checked ? "1" : null })} />
+            <input type="checkbox" class="accent-accent" checked={filters.overseas} onchange={event => void navigate({ overseas: event.currentTarget.checked ? "1" : null })} />
             只看海外
         </label>
     </div>
@@ -348,20 +362,20 @@ onKeys({
         <button
             type="button"
             aria-pressed={byDate}
-            title={sortTitles[data.sort === "oldest" ? "newest" : "oldest"]}
+            title={sortTitles[filters.sort === "oldest" ? "newest" : "oldest"]}
             class={byDate ? "text-ink" : "hover:text-ink"}
-            onclick={() => setSort(data.sort === "newest" ? "oldest" : "newest")}
+            onclick={() => setSort(filters.sort === "newest" ? "oldest" : "newest")}
         >
-            date{byDate ? (data.sort === "oldest" ? " ▲" : " ▼") : ""}
+            date{byDate ? (filters.sort === "oldest" ? " ▲" : " ▼") : ""}
         </button>
         <button
             type="button"
             aria-pressed={!byDate}
-            title={sortTitles[data.sort === "largest" ? "smallest" : "largest"]}
+            title={sortTitles[filters.sort === "largest" ? "smallest" : "largest"]}
             class={byDate ? "hover:text-ink" : "text-ink"}
-            onclick={() => setSort(data.sort === "largest" ? "smallest" : "largest")}
+            onclick={() => setSort(filters.sort === "largest" ? "smallest" : "largest")}
         >
-            amount{byDate ? "" : data.sort === "smallest" ? " ▲" : " ▼"}
+            amount{byDate ? "" : filters.sort === "smallest" ? " ▲" : " ▼"}
         </button>
     </span>
 </div>
@@ -447,8 +461,8 @@ onKeys({
             <span>{first}–{last} / {data.result.total}</span>
             <span class="flex items-center gap-2">
                 <span class="hidden lg:inline"><span class="text-accent">[j/k]</span> 上下移動 · <span class="text-accent">[enter]</span> 詳細 ·</span>
-                <button type="button" class="control min-h-8" disabled={data.pageNumber <= 1} onclick={() => goPage(data.pageNumber - 1)}><span class="text-accent">[p]</span> prev</button>
-                <button type="button" class="control min-h-8" disabled={data.pageNumber >= pages} onclick={() => goPage(data.pageNumber + 1)}><span class="text-accent">[n]</span> next</button>
+                <button type="button" class="control min-h-8" disabled={filters.page <= 1} onclick={() => goPage(filters.page - 1)}><span class="text-accent">[p]</span> prev</button>
+                <button type="button" class="control min-h-8" disabled={filters.page >= pages} onclick={() => goPage(filters.page + 1)}><span class="text-accent">[n]</span> next</button>
             </span>
         </div>
     </section>

@@ -1,5 +1,6 @@
 import {
     api,
+    attempt,
     need,
 } from "#lib/api/client.js";
 import { error } from "@sveltejs/kit";
@@ -14,5 +15,8 @@ export const load = (async ({ fetch, params }) => {
         client.GET("/api/documents/{id}", { params: { path: { id } } }),
         client.GET("/api/documents/{id}/preview", { params: { path: { id } } }),
     ]);
-    return { document: need(document), preview: need(preview), command: `documents show ${id}` };
+    // The parser opens the document for each view; when it is busy or cannot read the file, the page
+    // still shows what is known and the download of the original.
+    const opened = attempt(preview);
+    return { document: need(document), preview: opened.data, previewError: opened.error, command: `documents show ${id}` };
 }) satisfies PageLoad;

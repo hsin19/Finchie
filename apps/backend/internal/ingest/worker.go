@@ -55,7 +55,7 @@ func (w *Worker) Work(ctx context.Context, job *river.Job[ParseDocumentArgs]) er
 		return river.JobCancel(fmt.Errorf("document %d no longer exists", id))
 	}
 	if err != nil {
-		return fmt.Errorf("load document %d: %w", id, err)
+		return w.retry(ctx, job, fmt.Errorf("load document %d: %w", id, err))
 	}
 
 	callCtx, cancel := context.WithTimeout(ctx, w.timeout)
@@ -68,7 +68,8 @@ func (w *Worker) Work(ctx context.Context, job *river.Job[ParseDocumentArgs]) er
 	cancel()
 
 	if err != nil {
-		if retryable(err) && job.Attempt < job.MaxAttempts {
+		// A job cancelled because the backend is stopping says nothing about the document.
+		if (retryable(err) || ctx.Err() != nil) && job.Attempt < job.MaxAttempts {
 			return fmt.Errorf("parse document %d: %w", id, err)
 		}
 		return w.fail(ctx, id, describe(err))
@@ -79,16 +80,29 @@ func (w *Worker) Work(ctx context.Context, job *river.Job[ParseDocumentArgs]) er
 		return w.fail(ctx, id, err.Error())
 	}
 	if err != nil {
-		return fmt.Errorf("store document %d: %w", id, err)
+		return w.retry(ctx, job, fmt.Errorf("store document %d: %w", id, err))
 	}
 	slog.InfoContext(ctx, "document parsed", "document_id", id, "status", outcome,
 		"parser", response.GetParser(), "transactions", len(response.GetStatement().GetTransactions()))
 	return nil
 }
 
-// fail records why a document cannot be parsed and stops River from retrying it.
+// retry returns err for River to run the job again. After the last attempt nothing would, and the
+// document would stay pending for good, so it is marked failed instead.
+func (w *Worker) retry(ctx context.Context, job *river.Job[ParseDocumentArgs], err error) error {
+	if job.Attempt < job.MaxAttempts {
+		return err
+	}
+	return w.fail(ctx, job.Args.DocumentID, err.Error())
+}
+
+// fail records why a document cannot be parsed and stops River from retrying it. The write outlives
+// the job's context: a failure found as the job is cancelled (on shutdown, or at its timeout) must
+// still be recorded.
 func (w *Worker) fail(ctx context.Context, id int64, reason string) error {
-	err := dbq.New(w.pool).FinishDocument(ctx, dbq.FinishDocumentParams{
+	writeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	defer cancel()
+	err := dbq.New(w.pool).FinishDocument(writeCtx, dbq.FinishDocumentParams{
 		ID:       id,
 		Status:   StatusFailed,
 		Error:    &reason,

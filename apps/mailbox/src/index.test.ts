@@ -16,7 +16,7 @@ const env: Env = {
 
 const RAW = "From: Example Bank <statements@bank.example>\r\nSubject: Statement\r\n\r\nbody";
 
-function message(from: string, headers: Record<string, string>) {
+function message(from: string, headers: HeadersInit) {
     const sent = { rejected: undefined as string | undefined, forwardedTo: undefined as string | undefined };
     const msg = {
         from,
@@ -95,7 +95,7 @@ describe("mailbox", () => {
         expect(fetch).not.toHaveBeenCalled();
     });
 
-    it("passes mail from Google, such as Gmail's forwarding confirmation, to the owner", async () => {
+    it("passes Gmail's forwarding confirmation to the owner", async () => {
         const fetch = vi.fn();
         vi.stubGlobal("fetch", fetch);
         const { msg, sent } = message("forwarding-noreply@google.com", { from: "Gmail Team <forwarding-noreply@google.com>" });
@@ -105,6 +105,38 @@ describe("mailbox", () => {
         expect(sent.forwardedTo).toBe("owner@gmail.com");
         expect(sent.rejected).toBeUndefined();
         expect(fetch).not.toHaveBeenCalled();
+    });
+
+    it("rejects other mail from Google, such as a stranger's Drive share", async () => {
+        const fetch = vi.fn();
+        vi.stubGlobal("fetch", fetch);
+        const { msg, sent } = message("drive-shares-dm-noreply@google.com", { from: '"Stranger (via Google Drive)" <drive-shares-dm-noreply@google.com>' });
+
+        await receive(msg);
+
+        expect(sent.forwardedTo).toBeUndefined();
+        expect(sent.rejected).toMatch(/only takes mail forwarded by its owner/);
+        expect(fetch).not.toHaveBeenCalled();
+    });
+
+    it("rejects mail with a second From header naming Gmail's forwarding sender", async () => {
+        const { msg, sent } = message("someone@spam.example", [["from", "someone@spam.example"], ["from", "forwarding-noreply@google.com"]]);
+
+        await receive(msg);
+
+        expect(sent.forwardedTo).toBeUndefined();
+        expect(sent.rejected).toMatch(/only takes mail forwarded by its owner/);
+    });
+
+    it("uploads mail whose subject does not decode", async () => {
+        const fetch = vi.fn(async (_url: URL, _init: RequestInit) => new Response("{}", { status: 201 }));
+        vi.stubGlobal("fetch", fetch);
+        const { msg, sent } = message("owner@gmail.com", { subject: "=?UTF-8?B?a?=" });
+
+        await receive(msg);
+
+        expect(sent.rejected).toBeUndefined();
+        expect(fetch).toHaveBeenCalledOnce();
     });
 
     it("bounces the mail when something unexpected fails", async () => {

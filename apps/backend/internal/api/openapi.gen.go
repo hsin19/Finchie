@@ -1037,6 +1037,7 @@ type GetDocumentPreviewBodyResponseObject interface {
 }
 
 type GetDocumentPreviewBody200ResponseHeaders struct {
+	CacheControl          *string
 	ContentSecurityPolicy *string
 	ReferrerPolicy        *string
 	XContentTypeOptions   *string
@@ -1053,6 +1054,9 @@ func (response GetDocumentPreviewBody200TexthtmlCharsetUtf8Response) VisitGetDoc
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if response.ContentLength != 0 {
 		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
 	}
 	if response.Headers.ContentSecurityPolicy != nil {
 		w.Header().Set("Content-Security-Policy", fmt.Sprint(*response.Headers.ContentSecurityPolicy))
@@ -1124,6 +1128,7 @@ type GetDocumentPreviewFileResponseObject interface {
 }
 
 type GetDocumentPreviewFile200ResponseHeaders struct {
+	CacheControl        *string
 	ContentDisposition  *string
 	XContentTypeOptions *string
 }
@@ -1140,6 +1145,9 @@ func (response GetDocumentPreviewFile200AsteriskResponse) VisitGetDocumentPrevie
 	w.Header().Set("Content-Type", response.ContentType)
 	if response.ContentLength != 0 {
 		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
 	}
 	if response.Headers.ContentDisposition != nil {
 		w.Header().Set("Content-Disposition", fmt.Sprint(*response.Headers.ContentDisposition))
@@ -1207,6 +1215,7 @@ type GetDocumentPreviewPdfResponseObject interface {
 }
 
 type GetDocumentPreviewPdf200ResponseHeaders struct {
+	CacheControl        *string
 	ContentDisposition  *string
 	XContentTypeOptions *string
 }
@@ -1222,6 +1231,9 @@ func (response GetDocumentPreviewPdf200ApplicationpdfResponse) VisitGetDocumentP
 	w.Header().Set("Content-Type", "application/pdf")
 	if response.ContentLength != 0 {
 		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
 	}
 	if response.Headers.ContentDisposition != nil {
 		w.Header().Set("Content-Disposition", fmt.Sprint(*response.Headers.ContentDisposition))

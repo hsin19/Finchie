@@ -43,6 +43,7 @@ interface Entry {
 let entries = $state<Entry[]>([]);
 let dragging = $state(false);
 let input: HTMLInputElement | undefined = $state();
+let zone: HTMLElement | undefined = $state();
 let nextKey = 0;
 
 const documents = $derived(new Map(data.documents.map(d => [d.id, d])));
@@ -108,13 +109,20 @@ function ondrop(event: DragEvent) {
     if (event.dataTransfer?.files.length) void add(event.dataTransfer.files);
 }
 
+// Dropped beside the zone, the browser would open the file in place of the app.
+function refuseDrop(event: DragEvent) {
+    if (event.target instanceof Node && zone?.contains(event.target)) return;
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = "none";
+}
+
 // What to do about a failure, by the gRPC code the worker recorded ("FailedPrecondition: ...").
 function hint(error: string): string {
     if (error.startsWith("Unimplemented")) return "只收滙豐、台新、國泰、玉山的 .eml 或 .pdf 帳單";
-    if (error.startsWith("FailedPrecondition")) return "多半是 PDF 密碼沒設或不對：設定 parser 的密碼後按 [r] 重新解析";
+    if (error.startsWith("FailedPrecondition")) return "多半是 PDF 密碼沒設或不對：設定 parser 的密碼後按「重新解析」";
     if (error.startsWith("InvalidArgument")) return "檔案讀不出來：確認是銀行寄來的原始檔";
-    if (error.startsWith("Internal")) return "版面跟 parser 認得的不一樣：修好 parser 後按 [r] 重新解析";
-    return "按 [r] 重新解析";
+    if (error.startsWith("Internal")) return "版面跟 parser 認得的不一樣：修好 parser 後按「重新解析」";
+    return "按「重新解析」再試一次";
 }
 
 type Row = { tag: keyof typeof statuses; stage: string; detail: string; tone: "ink" | "dim" | "neg"; hint: string; link?: { statementId: number; text: string; }; percent: number; };
@@ -174,6 +182,8 @@ const summary = $derived.by(() => {
 onKeys({ Enter: () => input?.click() });
 </script>
 
+<svelte:window ondragover={refuseDrop} ondrop={refuseDrop} />
+
 {#snippet row(doc: Document | undefined, name: string, size: number, entry?: Entry)}
     {@const r = describe(doc, entry)}
     <tr class="border-t border-rule align-top">
@@ -192,13 +202,14 @@ onKeys({ Enter: () => input?.click() });
                 <div class="mt-0.5 text-[12px] text-mute">{r.hint}</div>
             {/if}
             {#if doc && r.tag === "failed"}
-                <button type="button" class="control mt-1.5 min-h-8" onclick={() => void reparse(entry, doc.id)}><span class="text-accent">[r]</span> 重新解析</button>
+                <button type="button" class="control mt-1.5 min-h-8" onclick={() => void reparse(entry, doc.id)}>重新解析</button>
             {/if}
         </td>
     </tr>
 {/snippet}
 
 <section
+    bind:this={zone}
     aria-label="上傳區"
     class="flex flex-col items-center gap-3 rounded-[6px] border-[1.5px] border-dashed border-accent px-5 py-10 text-center {dragging ? 'bg-accent/10' : 'bg-accent/[0.04]'}"
     ondragover={event => {
@@ -295,5 +306,5 @@ onKeys({ Enter: () => input?.click() });
         uploading → stored → parsing → <span class="text-pos">parsed</span> | <span class="text-neg">needs_review</span> | <span class="text-mute">duplicate</span> |
         <span class="text-neg">failed</span>
     </div>
-    <div class="text-mute">parser 連不上時會自動重試；檔案、密碼、版面的問題不重試，修好後按 [r] 重新解析。</div>
+    <div class="text-mute">parser 連不上時會自動重試；檔案、密碼、版面的問題不重試，修好後按「重新解析」。</div>
 </section>

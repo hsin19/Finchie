@@ -46,8 +46,25 @@ describe("claims", () => {
 
     it("never takes keys while typing", () => {
         expect(press(add("input"), "j")).toBe(false);
+        expect(press(add("input", i => (i.type = "search")), "j")).toBe(false);
+        expect(press(add("input", i => (i.type = "number")), "n")).toBe(false);
         expect(press(add("textarea"), "Escape")).toBe(false);
         expect(press(add("select"), "t")).toBe(false);
+    });
+
+    it("keeps working on a focused checkbox, but leaves it Space and Enter", () => {
+        const checkbox = add("input", i => (i.type = "checkbox"));
+        expect(press(checkbox, "j")).toBe(true);
+        expect(press(checkbox, "/")).toBe(true);
+        expect(press(checkbox, " ")).toBe(false);
+        expect(press(checkbox, "Enter")).toBe(false);
+    });
+
+    it("leaves keys that belong to an IME composition alone", () => {
+        expect(press(document.body, "Enter", { isComposing: true })).toBe(false);
+        // Safari: the Enter that confirms a candidate comes after compositionend, as keyCode 229.
+        expect(press(document.body, "Enter", { keyCode: 229 })).toBe(false);
+        expect(press(document.body, "j", { keyCode: 74 })).toBe(true);
     });
 
     it("leaves every key to an open dialog, Esc included", () => {

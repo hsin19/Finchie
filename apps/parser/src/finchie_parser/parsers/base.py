@@ -32,8 +32,7 @@ class StatementParser(ABC):
         return bool(self.filename_pattern.search(filename))
 
     def matches_text(self, document: Document) -> bool:
-        texts = document.page_texts()
-        return bool(texts) and self.text_marker in texts[0]
+        return any(self.text_marker in text for text in document.page_texts(1))
 
     @abstractmethod
     def parse(self, document: Document, ocr: Ocr | None) -> Parsed: ...

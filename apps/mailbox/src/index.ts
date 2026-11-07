@@ -6,7 +6,7 @@ import {
     domainOf,
     filename,
     forwardedBy,
-    isFromGoogle,
+    isForwardingConfirmation,
 } from "./mail";
 
 export interface Env {
@@ -45,9 +45,9 @@ async function receive(message: ForwardableEmailMessage, env: Env): Promise<void
         return;
     }
     // Adding this address to Gmail sends a confirmation here: the owner has to see it.
-    if (isFromGoogle(message.headers.get("from"))) {
+    if (isForwardingConfirmation(message.headers.get("from"))) {
         await message.forward(OWNER_EMAIL);
-        console.log("mailbox: passed mail from Google to the owner");
+        console.log("mailbox: passed Gmail's forwarding confirmation to the owner");
         return;
     }
     if (!forwardedBy(message.from, OWNER_EMAIL)) {

@@ -48,7 +48,7 @@ docker compose up -d    # local Postgres for `task backend:run`
   | `apps/backend/internal/api/openapi.gen.go` | `apps/backend/api/openapi.yaml` | `task backend:generate` |
   | `apps/web/src/lib/api/schema.d.ts` | `apps/backend/api/openapi.yaml` | `task web:generate` |
 
-- `buf breaking` guards the proto contract against incompatible changes once it exists on `main`.
+- `buf breaking` guards the proto contract against incompatible changes once it exists on `main`: CI compares a push to `main` with the commit before it and a PR with `main`; locally `task proto:breaking AGAINST=<ref>` (default `main`).
 - Real-statement regression: put `.eml` / `.pdf` files in `.local/statements/`, PDF passwords in `.local/parser.env`, and run `task parser:test-real`. It asserts that every statement reconciles. These files never leave `.local/` (ADR 0006).
 - Integration tests and local Compose need a Docker daemon. On Colima, testcontainers needs `DOCKER_HOST` or `docker context use colima`; the backend Taskfile sets the socket override it also needs.
 - Changed behavior needs a test. When fixing a bug, first make sure the new test fails without the fix.
