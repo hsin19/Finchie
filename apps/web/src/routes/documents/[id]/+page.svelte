@@ -16,9 +16,10 @@ import type { PageProps } from "./$types";
 
 let { data }: PageProps = $props();
 
-const doc = $derived(data.document);
-const email = $derived(data.preview.email);
-const files = $derived(data.preview.files);
+// The layout keeps data.documents fresh while the document is parsing.
+const doc = $derived(data.documents.find(d => d.id === data.document.id) ?? data.document);
+const email = $derived(data.preview?.email);
+const files = $derived(data.preview?.files ?? []);
 const statement = $derived(data.statements.find(s => s.documentId === doc.id));
 
 function open(index: number) {
@@ -76,7 +77,11 @@ onKeys(keys);
     </section>
 
     <section class="panel p-3.5">
-        <h2 class="label mb-1">FILES · 附件（{files.length}）</h2>
+        <h2 class="label mb-1">FILES · 附件{data.preview ? `（${files.length}）` : ""}</h2>
+        {#if data.previewError}
+            <p class="m-0 pt-1.5 break-words text-neg">打不開這份文件：{data.previewError}</p>
+            <p class="m-0 pt-1 text-mute">可以下載原始檔，或稍後再開一次。</p>
+        {/if}
         {#each files as file (file.index)}
             <div class="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 border-t border-rule py-2 first-of-type:border-t-0">
                 <span class="w-[3ch] text-accent">{file.index < 9 ? `[${file.index + 1}]` : ""}</span>
@@ -88,7 +93,7 @@ onKeys(keys);
                 </span>
             </div>
         {:else}
-            <p class="m-0 pt-1.5 text-mute">沒有附件</p>
+            {#if data.preview}<p class="m-0 pt-1.5 text-mute">沒有附件</p>{/if}
         {/each}
     </section>
 </div>

@@ -22,10 +22,30 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      # buf breaking compares against the local main branch, which a PR checkout does not have.
-      - name: Fetch main for the breaking-change check
-        if: ${{ github.ref != 'refs/heads/main' }}
-        run: git fetch --no-tags --depth=1 origin +refs/heads/main:refs/heads/main
+      # What the contracts have to stay compatible with: main for a PR (or a run by hand on a branch),
+      # the previous tip for a push to main. A release tag's commit was compared when it reached main,
+      # and a newer main is no baseline for an older tag.
+      - name: Fetch the baseline for breaking changes
+        id: baseline
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          case "$GITHUB_EVENT_NAME:$GITHUB_REF" in
+            *:refs/tags/*)
+              echo "Release tag: no baseline" ;;
+            push:refs/heads/main)
+              if [[ "$BEFORE" =~ ^0+$ ]]; then
+                echo "New branch: no baseline"
+              else
+                git fetch --no-tags --depth=1 origin "$BEFORE"
+                echo "ref=$BEFORE" >> "$GITHUB_OUTPUT"
+              fi ;;
+            *:refs/heads/main)
+              echo "Run by hand on main: no baseline" ;;
+            *)
+              git fetch --no-tags --depth=1 origin +refs/heads/main:refs/heads/main
+              echo "ref=main" >> "$GITHUB_OUTPUT" ;;
+          esac
 
       # buf runs through `go run`.
       - name: Setup Go
@@ -37,8 +57,14 @@ jobs:
       - name: Setup Task
         uses: go-task/setup-task@v2
 
-      - name: Format, lint, and breaking changes
-        run: task proto:check
+      - name: Format and lint
+        run: task proto:lint
+
+      - name: Breaking changes
+        if: ${{ !cancelled() && steps.baseline.outputs.ref != '' }}
+        run: task proto:breaking AGAINST="$AGAINST"
+        env:
+          AGAINST: ${{ steps.baseline.outputs.ref }}
 
   generated:
     name: Generated code is committed

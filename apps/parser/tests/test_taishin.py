@@ -94,3 +94,28 @@ def test_taishin_reads_refunds_of_foreign_purchases() -> None:
     assert (refund.kind, refund.amount) == (Kind.REFUND, Decimal(-125))
     assert (refund.original_currency, refund.original_amount, refund.country) == ("CNY", Decimal("-27.03"), "CN")
     assert statement.reconciliation.balanced
+
+
+# The last row of page 2 has its description on the line above; page 3 opens with the statement's
+# header, which names the due date.
+PAGE_BREAK_2 = """消費日 入帳起息日消費明細 新臺幣金額 外幣折算日 消費地 幣別 外幣金額
+Richart卡(原測試御璽) (卡號末四碼:1111)
+115/03/05 115/03/07 統一超商－測試店A9999 TAIPEI 65 TW
+網路商店退款
+115/03/06 115/03/09 -40 TW"""
+
+PAGE_BREAK_3 = """繳款截止日 115/04/22
+消費日 入帳起息日消費明細 新臺幣金額 外幣折算日 消費地 幣別 外幣金額
+115/03/20 115/03/22 健身中心 1,800 TW"""
+
+
+def test_taishin_never_joins_a_description_across_a_page_break() -> None:
+    page_1 = PAGE_1.replace("3,170", "1,825")
+    statement = TaishinParser().parse(FakeDocument([page_1, PAGE_BREAK_2, PAGE_BREAK_3]), ocr=None).statement
+    rows = [(tx.description, tx.kind, tx.amount, tx.card_last4) for tx in statement.transactions]
+    assert rows == [
+        ("統一超商-測試店A9999 TAIPEI", Kind.PURCHASE, Decimal(65), "1111"),
+        ("網路商店退款", Kind.REFUND, Decimal(-40), "1111"),
+        ("健身中心", Kind.PURCHASE, Decimal(1800), "1111"),
+    ]
+    assert statement.reconciliation.balanced

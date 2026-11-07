@@ -1,4 +1,5 @@
 <script lang="ts">
+import { composing } from "#lib/keys.js";
 import Dialog from "./Dialog.svelte";
 
 export interface Command {
@@ -31,6 +32,7 @@ function run(command: Command | undefined) {
 }
 
 function onkeydown(event: KeyboardEvent) {
+    if (composing(event)) return;
     if (event.key === "ArrowDown") active = Math.min(active + 1, matches.length - 1);
     else if (event.key === "ArrowUp") active = Math.max(active - 1, 0);
     else if (event.key === "Enter") run(matches[active]);

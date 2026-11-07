@@ -6,7 +6,7 @@ import {
     type TransactionLink,
     unwrap,
 } from "#lib/api/client.js";
-import FileLink, { openUrl } from "#lib/components/FileLink.svelte";
+import FileLink from "#lib/components/FileLink.svelte";
 import Tag from "#lib/components/Tag.svelte";
 import {
     formatBytes,
@@ -14,6 +14,7 @@ import {
     shortDate,
     shortDateTime,
 } from "#lib/dates.js";
+import { openUrl } from "#lib/documents.js";
 import { onKeys } from "#lib/keys.svelte.js";
 import {
     cardLabel,
@@ -29,6 +30,7 @@ import {
     sum,
 } from "#lib/money.js";
 import {
+    afterNavigate,
     goto,
     invalidate,
 } from "$app/navigation";
@@ -61,10 +63,14 @@ const byKind = $derived(
         .filter(k => k.rows > 0),
 );
 
-// Lines linked to these (ADR 0009) may be on other statements; ?line= picks the line to show.
+// Lines linked to these (ADR 0009) may be on other statements; ?line= picks the line to show. Scrolled
+// to once the navigation is done, since SvelteKit sets the scroll position at the very end of it; Back
+// keeps the position it restores.
 const target = $derived(Number(page.url.searchParams.get("line")) || undefined);
-$effect(() => {
-    if (target !== undefined) document.getElementById(`tx-${target}`)?.scrollIntoView({ block: "center" });
+afterNavigate(({ to, type }) => {
+    if (type === "popstate") return;
+    const line = Number(to?.url.searchParams.get("line"));
+    if (line) document.getElementById(`tx-${line}`)?.scrollIntoView({ block: "center" });
 });
 
 function lineHref(link: TransactionLink) {

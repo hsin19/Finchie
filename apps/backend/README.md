@@ -11,11 +11,11 @@ Defined spec-first in [`api/openapi.yaml`](api/openapi.yaml); `oapi-codegen` gen
 | `POST` | `/api/documents` | Multipart field `file`: an `.eml` or PDF. `201` when new, `200` when the same bytes were uploaded before |
 | `GET` | `/api/documents` | Newest first, `?limit=` up to 500 |
 | `GET` | `/api/documents/{id}` | Status, parser, warnings, error |
-| `GET` | `/api/documents/{id}/content` | The original file. Only PDFs open in the browser; anything else downloads, with `nosniff`. The stored content type comes from the bytes (`%PDF`) or the `.eml` extension, never from what the browser declared, because the file is served from the web app's origin |
+| `GET` | `/api/documents/{id}/content` | The original file. Only PDFs open in the browser; anything else downloads as `application/octet-stream`, with `nosniff`. The stored content type comes from the bytes (`%PDF`) or the `.eml` extension, never from what the browser declared, because the file is served from the web app's origin |
 | `GET` | `/api/documents/{id}/preview` | The document opened for reading by the parser: an e-mail's sender, recipient, subject, and date, and its files (the attachments, or the bare PDF). Nothing decrypted is stored ([ADR 0012](../../docs/adr/0012-reading-documents.md)) |
-| `GET` | `/api/documents/{id}/preview/pdf` | The statement PDF, decrypted, in the browser: the file the parser marks primary (the PDF whose name a bank parser knows, else the first PDF). `404` without a PDF |
-| `GET` | `/api/documents/{id}/preview/body` | The e-mail's body as a page for an iframe, sandboxed by its own Content-Security-Policy: no scripts, only `data:` and https images, links to a new tab |
-| `GET` | `/api/documents/{id}/preview/files/{index}` | One file, a PDF decrypted. Only PDFs open in the browser; anything else downloads as `application/octet-stream` with `nosniff` |
+| `GET` | `/api/documents/{id}/preview/pdf` | The statement PDF, decrypted, in the browser: the file the parser marks primary (the PDF whose name a bank parser knows, else the first PDF). `404` without a PDF. `Cache-Control: no-store`, so the decrypted copy stays out of the browser's cache too |
+| `GET` | `/api/documents/{id}/preview/body` | The e-mail's body as a page for an iframe, sandboxed by its own Content-Security-Policy: no scripts, only `data:` and https images, links to a new tab. `Cache-Control: no-store` |
+| `GET` | `/api/documents/{id}/preview/files/{index}` | One file, a PDF decrypted. Only PDFs open in the browser; anything else downloads as `application/octet-stream` with `nosniff`. `Cache-Control: no-store` |
 | `POST` | `/api/documents/{id}/reparse` | Parse the stored original again. The document's statement is replaced, so it gets a new id |
 | `GET` | `/api/statements` | Newest closing date first, with each statement's transaction count |
 | `GET` | `/api/statements/{id}` | One statement |
@@ -39,9 +39,11 @@ Amounts are decimal strings; statement dates are `YYYY-MM-DD` (ADR 0004).
 | `parsed` | Stored; transactions add up to the statement |
 | `needs_review` | Stored, but the transactions do not add up |
 | `duplicate` | Another document already holds this statement (same institution and closing date) |
-| `failed` | The parser rejected it (`error` says why), or it stayed unreachable for every attempt |
+| `failed` | The parser rejected it (`error` says why), or every attempt failed: the parser stayed unreachable, or the database refused the result |
 
-Only `UNAVAILABLE`, `DEADLINE_EXCEEDED`, and `RESOURCE_EXHAUSTED` are retried (6 attempts with River's back-off); everything else fails at once (ADR 0005).
+Only `UNAVAILABLE`, `DEADLINE_EXCEEDED`, and `RESOURCE_EXHAUSTED` from the parser are retried (6 attempts with River's back-off); everything else it returns fails at once (ADR 0005). Database errors are retried too.
+
+On `SIGTERM` the backend stops taking jobs and gives a parse in progress 30 seconds to finish; one still running then is cancelled and retried after the restart. Give the container longer than that to stop (Compose `stop_grace_period`; Docker's default is 10 seconds).
 
 ## Database
 
@@ -56,7 +58,7 @@ Only `UNAVAILABLE`, `DEADLINE_EXCEEDED`, and `RESOURCE_EXHAUSTED` are retried (6
 | `BACKEND_HTTP_ADDR` | `:8080` | |
 | `BACKEND_PARSER_ADDR` | `localhost:50051` | Parser gRPC address (plaintext, internal network only) |
 | `BACKEND_PARSE_TIMEOUT` | `120s` | Deadline for one parse |
-| `BACKEND_PARSE_CONCURRENCY` | `2` | Documents parsed at once; keep at or below the parser's workers |
+| `BACKEND_PARSE_CONCURRENCY` | `2` | Documents parsed at once; keep it below the parser's workers, so previews and health checks always get a thread |
 | `BACKEND_MAX_UPLOAD_MB` | `32` | |
 | `BACKEND_LOG_FORMAT` | `json` | `json` or `text` |
 | `BACKEND_ACCESS_TEAM_DOMAIN` | — | Cloudflare Access team domain, `https://<team>.cloudflareaccess.com`. With `BACKEND_ACCESS_AUD`, every request but `/healthz` needs a valid Access token (ADR 0008); a service token's (no e-mail address) may only `POST /api/documents` (ADR 0010). Leave both empty locally |

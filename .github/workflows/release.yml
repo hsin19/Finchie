@@ -3,7 +3,7 @@ name: Release
 # On a v* tag, after check.yml passes: build each image on native x64 and arm64 runners, smoke-check
 # it, and push that exact image as <version>-<arch>. Only when every build passes are the
 # linux/amd64 + linux/arm64 release tags created.
-# Image tags: v2.1.0 -> 2.1.0, 2.1, sha-<short sha>.
+# Image tags: v2.1.0 -> 2.1.0, sha-<short sha>, and 2.1 while it is the highest 2.1.x release.
 on:
   push:
     tags: ['v*']
@@ -28,6 +28,7 @@ jobs:
     outputs:
       version: ${{ steps.tags.outputs.version }}
       tags: ${{ steps.tags.outputs.tags }}
+      minor: ${{ steps.tags.outputs.minor }}
     steps:
       # Pre-releases (v2.1.0-rc.1) get no major.minor tag, so 2.1 always points at a final release.
       - name: Resolve image tags
@@ -38,13 +39,11 @@ jobs:
             echo "::error::Tag $GITHUB_REF_NAME is not v<major>.<minor>.<patch>[-<pre-release>]"
             exit 1
           fi
-          tags="$version"
-          if [[ "$version" != *-* ]]; then
-            tags="$tags;${version%.*}"
-          fi
-          tags="$tags;sha-${GITHUB_SHA::7}"
           echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "tags=$tags" >> "$GITHUB_OUTPUT"
+          echo "tags=$version;sha-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+          if [[ "$version" != *-* ]]; then
+            echo "minor=${version%.*}" >> "$GITHUB_OUTPUT"
+          fi
 
   # Each architecture has to run before it is pushed: the arm64 homelab gets the arm64 build that was
   # smoke-checked. Nothing uses the <version>-<arch> tags until publish merges them.
@@ -122,6 +121,12 @@ jobs:
     strategy:
       matrix:
         image: [finchie-backend, finchie-parser]
+    # Publishes of different tags wait for one another (queue: max, so a waiting one is not cancelled
+    # when a third arrives): finding the highest release of a line and moving its tag must not
+    # interleave with another release doing the same.
+    concurrency:
+      group: release-publish-${{ matrix.image }}
+      queue: max
 
     steps:
       - name: Log in to GHCR
@@ -140,3 +145,20 @@ jobs:
           IMAGE: ${{ matrix.image }}
           VERSION: ${{ needs.meta.outputs.version }}
           TAGS: ${{ needs.meta.outputs.tags }}
+
+      - name: Move the major.minor tag if this is the line's highest release
+        if: ${{ needs.meta.outputs.minor != '' }}
+        run: |
+          versions=$(gh api --paginate "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/v$MINOR." --jq '.[].ref | ltrimstr("refs/tags/v")')
+          highest=$(grep -xE '[0-9]+\.[0-9]+\.[0-9]+' <<< "$versions" | sort -V | tail -n 1)
+          if [[ "$highest" != "$VERSION" ]]; then
+            echo "$MINOR stays: $highest is a later release"
+            exit 0
+          fi
+          repo="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/$IMAGE"
+          docker buildx imagetools create -t "$repo:$MINOR" "$repo:$VERSION-linux-amd64" "$repo:$VERSION-linux-arm64"
+        env:
+          IMAGE: ${{ matrix.image }}
+          VERSION: ${{ needs.meta.outputs.version }}
+          MINOR: ${{ needs.meta.outputs.minor }}
+          GH_TOKEN: ${{ github.token }}

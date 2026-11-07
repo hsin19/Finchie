@@ -27,7 +27,7 @@ _ROW = re.compile(
 
 class TaishinParser(StatementParser):
     name = "taishin.credit_card"
-    version = "2"
+    version = "3"
     institution = "taishin"
     filename_pattern = re.compile(r"^TSB_Creditcard_Estatement_\d+\.pdf$", re.IGNORECASE)
     text_marker = "台新"
@@ -39,19 +39,23 @@ class TaishinParser(StatementParser):
         new_charges = amount(find(_NEW_CHARGES, texts, "本期新增款項").group(1))
         total_due = amount(find(_TOTAL_DUE, texts, "本期累計應繳金額").group(1))
 
-        lines = [line for text in texts for line in text.splitlines() if line.strip()]
+        # (page index, line): a wrapped description never continues across a page break.
+        lines = [(page, line) for page, text in enumerate(texts) for line in text.splitlines() if line.strip()]
         transactions: list[Transaction] = []
         card = ""
         i = 0
         while i < len(lines):
-            line = lines[i]
+            page, line = lines[i]
             if match := _CARD.search(line):
                 card = match.group(1)
             elif match := _ROW.match(line):
                 description = match["desc"] or ""
-                if not description and 0 < i < len(lines) - 1:
-                    description = f"{lines[i - 1]} {lines[i + 1]}"
-                    i += 1
+                if not description:
+                    above = lines[i - 1][1] if i > 0 and lines[i - 1][0] == page else ""
+                    below = lines[i + 1][1] if i + 1 < len(lines) and lines[i + 1][0] == page else ""
+                    description = f"{above} {below}"
+                    if below:
+                        i += 1
                 value = amount(match["amt"])
                 description = clean(description)
                 kind = _kind(description, value)

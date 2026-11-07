@@ -12,8 +12,8 @@ bank ──▶ Gmail ──filter, forward──▶ finchie@<domain> (Email Rout
 | Mail | What happens |
 |---|---|
 | Forwarded by the owner's Gmail (envelope sender `owner+caf_=…@gmail.com`, or the owner's own address) | Uploaded. Anything the backend cannot parse shows up as a document marked skip or err |
-| From `google.com`, such as Gmail's "confirm forwarding" message | Forwarded to the owner, who confirms the new forwarding address with it. Email Routing checks DMARC first, so the From header can be trusted |
-| Anything else | Rejected at SMTP time; nothing is stored |
+| Gmail's "confirm forwarding" message (one From address, `forwarding-noreply@google.com`) | Forwarded to the owner, who confirms the new forwarding address with it. Email Routing checks DMARC first, so the From header can be trusted |
+| Anything else, other mail from `google.com` included (anyone can share a Drive file with the address) | Rejected at SMTP time; nothing is stored |
 | Upload fails (backend down, token refused) or anything else goes wrong | Rejected, so the bounce reaches the owner's Gmail: upload that one by hand |
 
 ## Settings
@@ -29,6 +29,10 @@ runs this Worker) and the service token belong to the deployment's Cloudflare co
 | `ACCESS_CLIENT_ID`, `ACCESS_CLIENT_SECRET` | The Access service token; the backend lets it upload and nothing else |
 
 Until all four are set the Worker rejects every message.
+
+`OWNER_EMAIL` has to be a verified destination address in Email Routing before the finchie address is
+added as a forwarding address in Gmail: `message.forward()` only reaches verified destinations, so
+until then Gmail's confirmation bounces instead of reaching the owner.
 
 ## Commands
 

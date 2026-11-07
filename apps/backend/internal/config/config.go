@@ -15,7 +15,8 @@ type Config struct {
 	ParserAddr  string `env:"PARSER_ADDR" envDefault:"localhost:50051"`
 	// The parser needs a few seconds per statement, longer with OCR (ADR 0005).
 	ParseTimeout time.Duration `env:"PARSE_TIMEOUT" envDefault:"120s"`
-	// How many documents are parsed at once; keep it at or below the parser's workers.
+	// How many documents are parsed at once; keep it below the parser's workers, so previews and
+	// health checks always get a thread.
 	ParseConcurrency int    `env:"PARSE_CONCURRENCY" envDefault:"2"`
 	MaxUploadMB      int    `env:"MAX_UPLOAD_MB" envDefault:"32"`
 	LogFormat        string `env:"LOG_FORMAT" envDefault:"json"`

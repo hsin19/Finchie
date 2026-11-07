@@ -4,13 +4,16 @@ The browser app (ADR 0007): a SvelteKit single-page app, embedded in the backend
 
 | Route | Page |
 |---|---|
-| `/` | Overview for a month: spending, dues, foreign transaction fees, rebates, spending by card and by kind, recent statements |
-| `/statements` | Every statement with its reconciliation, plus documents that produced none |
-| `/statements/{id}` | One statement: metadata, reconciliation by kind, its lines in statement order, processing log, re-parse |
+| `/` | Overview: this month's and last month's bills, what is due, the year so far, a 12-month trend, recent statements and documents |
+| `/statements` | One month's bill (`?m=`, a closing month): what is due, spending, foreign transaction fees, rebates, by card and by kind, its statements. `?all` lists every statement, plus documents that produced none |
+| `/statements/{id}` | One statement: metadata, reconciliation by kind, its lines in statement order, processing log, re-parse; `?line=` scrolls to a line |
+| `/documents/{id}` | One document opened for reading (ADR 0012): an e-mail's headers, attachments, and body; the original to download even when the parser cannot open it |
 | `/transactions` | Search across statements: period, card, kinds, overseas, text; totals for the whole match |
 | `/upload` | Drop `.eml` / `.pdf` files and follow each through parsing |
 
-Keys: `o` `s` `t` `u` switch pages, `/` searches, `j` `k` `Enter` `n` `p` move through transactions, `?` lists everything, `⌘K` opens the command palette.
+Keys: `o` `s` `t` `u` switch pages, `/` searches, `j` `k` `Enter` `n` `p` move through transactions, `f` opens a statement's PDF, `1`–`9` a document's attachments, `?` lists everything, `⌘K` opens the command palette.
+
+A document opens in a new tab (`FileLink`, `openUrl` in `src/lib/documents.ts`): a PDF, or an e-mail a parser recognized (parsed, needs review, duplicate), as its statement PDF decrypted (`/api/documents/{id}/preview/pdf`); an e-mail that failed, was skipped, or is still parsing on `/documents/{id}`, to see what it is; anything else as the original download (`/api/documents/{id}/content`).
 
 ## Development
 
@@ -33,8 +36,9 @@ Node 26 (`.node-version`); the pnpm version is pinned in `package.json`.
 | `src/lib/api/` | Generated types (`schema.d.ts`) and the `openapi-fetch` client |
 | `src/lib/money.ts` | Exact decimal arithmetic and formatting for amounts (ADR 0004) |
 | `src/lib/labels.ts` | Bank names, kind and status labels, tone classes |
-| `src/lib/fees.ts` | Pairs a foreign purchase with the fee charged for it |
-| `src/lib/keys.ts` | Which key presses are shortcuts: never while typing, never while a dialog is open, never Enter or Space on a focused button or link |
+| `src/lib/documents.ts` | Where a document opens |
+| `src/lib/filters.ts` | The transactions page's filters, read from and written to the URL |
+| `src/lib/keys.ts` | Which key presses are shortcuts: never while typing in a text field or composing with an IME, never while a dialog is open, never Enter or Space on a focused control |
 
 ## Pitfalls (SvelteKit 3)
 
@@ -42,5 +46,7 @@ Node 26 (`.node-version`); the pnpm version is pinned in `package.json`.
 - `+page.ts` / `+layout.ts` may only export SvelteKit's names (`load`, `ssr`, …); shared constants go in `src/lib/`. Type loads with `satisfies PageLoad`, not `: PageLoad`, or `data` loses its types.
 - `svelte-check` reads proxy files that `svelte-kit sync` writes; run `pnpm typecheck`, which syncs first.
 - `goto` options are `replace`, `reset: false` (keep scroll and focus), and `refreshAll`.
-- Internal links go through `resolve()` (`svelte/no-navigation-without-resolve`). Links to API files use `FileLink`.
+- `page.url` and `data` change only once a navigation's load is done. A control that changes the URL builds on the URL last asked for (`QueryRequests`), or a second change made while the first loads undoes it.
+- SvelteKit sets the scroll position at the very end of a navigation, after the page's `$effect`s ran; scroll to something in `afterNavigate`.
+- Internal links go through `resolve()` (`svelte/no-navigation-without-resolve`). Links that open a document use `FileLink`.
 - A re-parse gives the statement a new id; the statement page follows it.

@@ -8,7 +8,7 @@ import {
     domainOf,
     filename,
     forwardedBy,
-    isFromGoogle,
+    isForwardingConfirmation,
 } from "./mail";
 
 function base64(bytes: Uint8Array): string {
@@ -31,17 +31,34 @@ describe("forwardedBy", () => {
     });
 });
 
-describe("isFromGoogle", () => {
-    it("recognises Google as the sender", () => {
-        expect(isFromGoogle("Gmail Team <forwarding-noreply@google.com>")).toBe(true);
-        expect(isFromGoogle("forwarding-noreply@google.com")).toBe(true);
+describe("isForwardingConfirmation", () => {
+    it("recognises Gmail's forwarding confirmation", () => {
+        expect(isForwardingConfirmation("Gmail Team <forwarding-noreply@google.com>")).toBe(true);
+        expect(isForwardingConfirmation("forwarding-noreply@google.com")).toBe(true);
+        expect(isForwardingConfirmation('"Gmail Team, Google" <Forwarding-Noreply@Google.com>')).toBe(true);
+        expect(isForwardingConfirmation("forwarding-noreply@google.com (Gmail Team)")).toBe(true);
+    });
+
+    it("refuses other mail from Google", () => {
+        expect(isForwardingConfirmation('"Stranger (via Google Drive)" <drive-shares-dm-noreply@google.com>')).toBe(false);
+        expect(isForwardingConfirmation("Google <no-reply@accounts.google.com>")).toBe(false);
+    });
+
+    it("refuses more than one address", () => {
+        expect(isForwardingConfirmation("someone@spam.example, forwarding-noreply@google.com")).toBe(false);
+        expect(isForwardingConfirmation("Someone <someone@spam.example>, Gmail Team <forwarding-noreply@google.com>")).toBe(false);
+        expect(isForwardingConfirmation("forwarding-noreply@google.com, forwarding-noreply@google.com")).toBe(false);
+        expect(isForwardingConfirmation("Gmail Team <forwarding-noreply@google.com> someone@spam.example")).toBe(false);
+        expect(isForwardingConfirmation('forwarding-noreply@google.com ("), someone@spam.example (")')).toBe(false);
     });
 
     it("is not fooled by lookalikes", () => {
-        expect(isFromGoogle("someone@google.com.example.net")).toBe(false);
-        expect(isFromGoogle("<someone@notgoogle.com>")).toBe(false);
-        expect(isFromGoogle("someone@gmail.com")).toBe(false);
-        expect(isFromGoogle(null)).toBe(false);
+        expect(isForwardingConfirmation("forwarding-noreply@google.com.example.net")).toBe(false);
+        expect(isForwardingConfirmation("<forwarding-noreply@notgoogle.com>")).toBe(false);
+        expect(isForwardingConfirmation('"forwarding-noreply@google.com" <someone@spam.example>')).toBe(false);
+        expect(isForwardingConfirmation("someone@spam.example (forwarding-noreply@google.com)")).toBe(false);
+        expect(isForwardingConfirmation('"Gmail Team <forwarding-noreply@google.com>')).toBe(false);
+        expect(isForwardingConfirmation(null)).toBe(false);
     });
 });
 
@@ -67,6 +84,11 @@ describe("decodeHeader", () => {
     it("leaves other charsets alone", () => {
         expect(decodeHeader("=?big5?B?pWg=?=")).toBe("=?big5?B?pWg=?=");
     });
+
+    it("leaves malformed words alone", () => {
+        expect(decodeHeader("Statement =?UTF-8?B?a?=")).toBe("Statement =?UTF-8?B?a?=");
+        expect(decodeHeader("=?UTF-8?B?***?= (1)")).toBe("=?UTF-8?B?***?= (1)");
+    });
 });
 
 describe("filename", () => {
@@ -75,6 +97,10 @@ describe("filename", () => {
     it("names the file after the subject", () => {
         expect(filename(encode("範例銀行 2026年10月 電子帳單"), received)).toBe("範例銀行 2026年10月 電子帳單.eml");
         expect(filename("a/b: c?", received)).toBe("a b c.eml");
+    });
+
+    it("names the file even when the subject has a malformed word", () => {
+        expect(filename("=?UTF-8?B?a?= 電子帳單", received)).toBe("= UTF-8 B a = 電子帳單.eml");
     });
 
     it("falls back to the date", () => {

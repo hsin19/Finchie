@@ -107,3 +107,31 @@ def test_cathay_reads_foreign_refunds_and_fee_refunds() -> None:
         ("TAX FREE REFUND SHOP", Kind.REFUND, Decimal(-95), Decimal("-2.80"), "EUR"),
     ]
     assert statement.reconciliation.balanced
+
+
+PAYMENTS_PAGE = """您本月消費明細如下：
+上期帳單總額 1,500
+03/18 03/18 本行自動扣繳 -500
+03/20 03/20 ATM轉帳 822 -1,000
+繳款小計 -1,500
+03/05 03/08 測試計程車隊 250 4321 TW TWD
+正卡本期消費 250
+本期應繳總額 250
+◎ 您的新臺幣帳款將於 115/04/17 (遇假日順延)之次一營業日自帳號扣款250元整
+國泰世華CUBE App"""
+
+
+def test_cathay_reads_payments_whose_description_has_digits() -> None:
+    parsed = CathayParser().parse(FakeDocument([PAGE_1, PAYMENTS_PAGE]), ocr=None)
+    payments = [(tx.description, tx.amount) for tx in parsed.statement.transactions if tx.kind is Kind.PAYMENT]
+    assert payments == [("本行自動扣繳", Decimal(-500)), ("ATM轉帳 822", Decimal(-1000))]
+    assert parsed.warnings == []
+
+
+def test_cathay_warns_when_payments_do_not_add_up_to_the_printed_subtotal() -> None:
+    page = PAYMENTS_PAGE.replace("繳款小計 -1,500", "繳款小計 -2,000")
+    parsed = CathayParser().parse(FakeDocument([PAGE_1, page]), ocr=None)
+    assert len(parsed.warnings) == 1
+    assert "繳款小計" in parsed.warnings[0]
+    # The new charges still reconcile: payments are not part of them.
+    assert parsed.statement.reconciliation.balanced

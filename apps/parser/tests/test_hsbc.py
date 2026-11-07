@@ -1,6 +1,7 @@
 from datetime import date
 from decimal import Decimal
 
+import pytest
 from fakes import FakeDocument, FakeOcr
 
 from finchie_parser.model import Kind
@@ -94,3 +95,60 @@ def test_hsbc_warns_about_rows_ocr_missed() -> None:
     parsed = parse(FakeOcr(partial))
     assert len(parsed.warnings) == 1
     assert parsed.statement.reconciliation.balanced
+
+
+# The payments section lists a payment and the annual fee's waiver; the new charges the annual fee,
+# revolving interest, a late fee, a cash-back credit, and a foreign transaction fee.
+CHARGES_PAGE = """2/2 O
+3,000
+04/05 04/05 -3,000
+04/07 04/07 -1,800
+-4,800
+-1,800
+03/25 03/25 1,800
+04/21 04/21 150
+04/21 04/21 300
+04/02 04/02 -50
+04/02 04/03 32
+2,232
+432
+140,000 28,000"""
+
+CHARGES_OCR = {
+    1: {
+        2: "全國繳費網繳款",
+        3: "年費減免",
+        6: "年費",
+        7: "循環信用利息",
+        8: "違約金",
+        9: "現金回饋",
+        10: "國外交易手續費CAFEDEFLORE",
+    }
+}
+
+
+def parse_charges(ocr: FakeOcr | None):
+    return HsbcParser().parse(FakeDocument([PAGE_1, CHARGES_PAGE]), ocr=ocr).statement
+
+
+def test_hsbc_classifies_plain_rows_by_the_words_in_their_description() -> None:
+    statement = parse_charges(FakeOcr(CHARGES_OCR))
+    assert [(tx.description, tx.kind, tx.amount) for tx in statement.transactions] == [
+        ("全國繳費網繳款", Kind.PAYMENT, Decimal(-3000)),
+        ("年費減免", Kind.ANNUAL_FEE, Decimal(-1800)),
+        ("年費", Kind.ANNUAL_FEE, Decimal(1800)),
+        ("循環信用利息", Kind.PURCHASE, Decimal(150)),
+        ("違約金", Kind.PURCHASE, Decimal(300)),
+        ("現金回饋", Kind.REBATE, Decimal(-50)),
+        ("國外交易手續費CAFEDEFLORE", Kind.FOREIGN_TRANSACTION_FEE, Decimal(32)),
+    ]
+    assert statement.reconciliation.balanced
+    assert statement.reconciliation.computed == Decimal(2232)
+
+
+@pytest.mark.parametrize("ocr", [None, FakeOcr({1: dict.fromkeys(CHARGES_OCR[1], "#?!")})], ids=["no OCR", "noisy"])
+def test_hsbc_without_readable_words_keeps_payments_and_foreign_transaction_fees(ocr: FakeOcr | None) -> None:
+    statement = parse_charges(ocr)
+    assert [tx.kind for tx in statement.transactions] == [Kind.PAYMENT] * 2 + [Kind.FOREIGN_TRANSACTION_FEE] * 5
+    assert statement.reconciliation.balanced
+    assert statement.reconciliation.computed == Decimal(2232)

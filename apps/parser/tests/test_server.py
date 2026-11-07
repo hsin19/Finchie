@@ -1,3 +1,4 @@
+import threading
 from collections.abc import Iterator
 from datetime import UTC, date, datetime
 from decimal import Decimal
@@ -10,6 +11,7 @@ from pdfs import blank_pdf, statement_email
 from finchie.parser.v1 import parser_pb2 as pb
 from finchie.parser.v1 import parser_pb2_grpc
 from finchie_parser import server as server_module
+from finchie_parser.errors import UnsupportedDocumentError
 from finchie_parser.model import Kind, ParseResult, Reconciliation, Statement, Transaction
 from finchie_parser.settings import Settings
 
@@ -53,6 +55,39 @@ def test_health_reports_serving(channel: grpc.Channel) -> None:
     stub = health_pb2_grpc.HealthStub(channel)
     response = stub.Check(health_pb2.HealthCheckRequest(service=server_module.SERVICE_NAME), timeout=5)
     assert response.status == health_pb2.HealthCheckResponse.SERVING
+
+
+def test_health_and_previews_answer_while_the_backend_parses_two_documents(monkeypatch: pytest.MonkeyPatch) -> None:
+    # BACKEND_PARSE_CONCURRENCY is 2; the container healthcheck gives up after 3 seconds.
+    started, release = threading.Semaphore(0), threading.Event()
+
+    def slow_parse(*_: object, **__: object) -> ParseResult:
+        started.release()
+        release.wait(10)
+        raise UnsupportedDocumentError("released")
+
+    monkeypatch.setattr(server_module, "parse_document", slow_parse)
+    server, port = server_module.build_server(Settings(_env_file=None, ocr=False), None, "127.0.0.1:0")
+    server.start()
+    try:
+        with grpc.insecure_channel(f"127.0.0.1:{port}") as channel:
+            stub = parser_pb2_grpc.ParserServiceStub(channel)
+            request = pb.ParseDocumentRequest(document_id="d1", filename="doc", content_type="application/pdf")
+            parses = [stub.ParseDocument.future(request, timeout=10) for _ in range(2)]
+            assert all(started.acquire(timeout=5) for _ in parses)
+
+            health = health_pb2_grpc.HealthStub(channel).Check(health_pb2.HealthCheckRequest(), timeout=3)
+            preview = stub.OpenDocument(
+                pb.OpenDocumentRequest(
+                    document_id="d2", filename="x.pdf", content_type="application/pdf", content=blank_pdf()
+                ),
+                timeout=3,
+            )
+    finally:
+        release.set()
+        server.stop(grace=None)
+    assert health.status == health_pb2.HealthCheckResponse.SERVING
+    assert [f.filename for f in preview.files] == ["x.pdf"]
 
 
 def test_result_is_converted_to_proto(channel: grpc.Channel, monkeypatch: pytest.MonkeyPatch) -> None:

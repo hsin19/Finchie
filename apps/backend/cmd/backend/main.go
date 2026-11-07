@@ -36,6 +36,10 @@ import (
 // version is the release, set at build time (-ldflags "-X main.version=2.4.0"); telemetry carries it.
 var version = "dev"
 
+// jobStopTimeout is how long a parse running at shutdown gets to finish; then its context is cancelled
+// and River retries it after the restart.
+const jobStopTimeout = 30 * time.Second
+
 func main() {
 	if len(os.Args) > 1 && os.Args[1] == "healthcheck" {
 		addr := os.Getenv("BACKEND_HTTP_ADDR")
@@ -117,6 +121,8 @@ func run() error {
 		Queues:  map[string]river.QueueConfig{river.QueueDefault: {MaxWorkers: cfg.ParseConcurrency}},
 		Workers: workers,
 		Logger:  logger,
+		// Without it, the signal that cancels the context passed to Start cancels running jobs too.
+		SoftStopTimeout: jobStopTimeout,
 		// The parse job's span links back to the upload that enqueued it, and is named after the job.
 		Middleware: []rivertype.Middleware{otelriver.NewMiddleware(&otelriver.MiddlewareConfig{
 			EnableTracePropagation:      true,
@@ -146,13 +152,15 @@ func run() error {
 		}
 		return c.String(http.StatusOK, "ok")
 	})
-	api.RegisterHandlers(e, api.NewStrictHandler(api.NewServer(pool, jobs, parser, cfg.MaxUploadBytes()), nil))
+	api.Register(e, api.NewServer(pool, jobs, parser, cfg.MaxUploadBytes()))
 	web.Register(e)
 
 	slog.Info("listening", "addr", cfg.HTTPAddr, "parser", cfg.ParserAddr)
 	serveErr := echo.StartConfig{Address: cfg.HTTPAddr, HideBanner: true, GracefulTimeout: 10 * time.Second}.Start(ctx, telemetry.Handler(e))
 
-	stopCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	// River's soft stop started with the signal; the extra seconds let the jobs it then cancels return
+	// and their retries be recorded.
+	stopCtx, cancel := context.WithTimeout(context.Background(), jobStopTimeout+5*time.Second)
 	defer cancel()
 	if err := jobs.Stop(stopCtx); err != nil {
 		slog.Warn("jobs did not stop cleanly", "error", err)

@@ -104,8 +104,8 @@ func TestPreviewFilesOpenOnlyPDFsInPlace(t *testing.T) {
 		if recorder.Code != tc.code || header.Get("Content-Type") != tc.contentType || header.Get("Content-Disposition") != tc.disposition {
 			t.Fatalf("file %d: %d %v", tc.index, recorder.Code, header)
 		}
-		if tc.code == http.StatusOK && header.Get("X-Content-Type-Options") != "nosniff" {
-			t.Fatalf("file %d: no nosniff", tc.index)
+		if tc.code == http.StatusOK && (header.Get("X-Content-Type-Options") != "nosniff" || header.Get("Cache-Control") != "no-store") {
+			t.Fatalf("file %d: %v, want nosniff and no-store", tc.index, header)
 		}
 	}
 	if body := get(t, e, fmt.Sprintf("/api/documents/%d/preview/files/0", id)).Body.String(); body != "%PDF decrypted" {
@@ -119,7 +119,8 @@ func TestPreviewPDFIsTheStatementOpenedInPlace(t *testing.T) {
 	header := recorder.Header()
 	if recorder.Code != http.StatusOK || header.Get("Content-Type") != "application/pdf" ||
 		header.Get("Content-Disposition") != "inline; filename*=utf-8''%E5%B8%B3%E5%96%AE.pdf" ||
-		header.Get("X-Content-Type-Options") != "nosniff" || recorder.Body.String() != "%PDF decrypted" {
+		header.Get("X-Content-Type-Options") != "nosniff" || header.Get("Cache-Control") != "no-store" ||
+		recorder.Body.String() != "%PDF decrypted" {
 		t.Fatalf("pdf: %d %v %q", recorder.Code, header, recorder.Body)
 	}
 
@@ -137,6 +138,18 @@ func TestPreviewBodyIsASandboxedPageWhoseLinksOpenANewTab(t *testing.T) {
 	}{
 		{"html with doctype", "<!DOCTYPE html>\n<html><p>本期帳單</p></html>", "", `<!DOCTYPE html><base target="_blank">` + "\n<html><p>本期帳單</p></html>"},
 		{"html fragment", "<p>本期帳單</p>", "", `<base target="_blank"><p>本期帳單</p>`},
+		{
+			"head", `<!DOCTYPE html><html><HEAD lang="zh"><base target="_self"></head><body><header>本期帳單</header>`, "",
+			`<!DOCTYPE html><html><HEAD lang="zh"><base target="_blank"><base target="_self"></head><body><header>本期帳單</header>`,
+		},
+		// Whatever may precede a doctype stays ahead of it, so the page keeps standards mode.
+		{"byte-order mark", "\ufeff<!doctype html><p>本期帳單</p>", "", "\ufeff<!doctype html>" + `<base target="_blank"><p>本期帳單</p>`},
+		{"comment", "<!-- bank template -->\n<!DOCTYPE html><p>本期帳單</p>", "", "<!-- bank template -->\n<!DOCTYPE html>" + `<base target="_blank"><p>本期帳單</p>`},
+		{
+			"xml prolog", `<?xml version="1.0" encoding="utf-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"><p>本期帳單</p>`, "",
+			`<?xml version="1.0" encoding="utf-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"><base target="_blank"><p>本期帳單</p>`,
+		},
+		{"byte-order mark without doctype", "\ufeff<p>本期帳單</p>", "", "\ufeff" + `<base target="_blank"><p>本期帳單</p>`},
 		{"plain text", "", "a < b", "a &lt; b</pre>"},
 	}
 	for _, tc := range cases {
@@ -147,7 +160,8 @@ func TestPreviewBodyIsASandboxedPageWhoseLinksOpenANewTab(t *testing.T) {
 			if recorder.Code != http.StatusOK || header.Get("Content-Type") != "text/html; charset=utf-8" ||
 				!strings.HasPrefix(header.Get("Content-Security-Policy"), "sandbox ") ||
 				!strings.Contains(header.Get("Content-Security-Policy"), "default-src 'none'") ||
-				header.Get("Referrer-Policy") != "no-referrer" || header.Get("X-Content-Type-Options") != "nosniff" {
+				header.Get("Referrer-Policy") != "no-referrer" || header.Get("X-Content-Type-Options") != "nosniff" ||
+				header.Get("Cache-Control") != "no-store" {
 				t.Fatalf("body: %d %v", recorder.Code, header)
 			}
 			if !strings.HasSuffix(recorder.Body.String(), tc.want) {
@@ -170,19 +184,24 @@ func TestPreviewBodyOfABarePDFIsNotFound(t *testing.T) {
 
 func TestPreviewReportsWhatStoppedIt(t *testing.T) {
 	cases := []struct {
-		name string
-		err  error
-		code int
+		name    string
+		err     error
+		code    int
+		message string
 	}{
-		{"unreadable", status.Error(codes.InvalidArgument, "unreadable"), http.StatusUnprocessableEntity},
-		{"parser down", status.Error(codes.Unavailable, "connection refused"), http.StatusServiceUnavailable},
+		{"unreadable", status.Error(codes.InvalidArgument, "unreadable"), http.StatusUnprocessableEntity, "cannot open this document: unreadable"},
+		{"too large", status.Error(codes.ResourceExhausted, "grpc: received message larger than max"), http.StatusUnprocessableEntity, "too large"},
+		{"parser down", status.Error(codes.Unavailable, "connection refused"), http.StatusServiceUnavailable, "not reachable"},
+		// The browser went away: not a server error.
+		{"cancelled", status.Error(codes.Canceled, "context canceled"), 499, "cancelled"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			e, id := previewAPI(t, &openingParser{err: tc.err})
 			for _, path := range []string{"preview", "preview/pdf", "preview/body", "preview/files/0"} {
-				if recorder := get(t, e, fmt.Sprintf("/api/documents/%d/%s", id, path)); recorder.Code != tc.code {
-					t.Fatalf("%s: status = %d, want %d", path, recorder.Code, tc.code)
+				recorder := get(t, e, fmt.Sprintf("/api/documents/%d/%s", id, path))
+				if recorder.Code != tc.code || !strings.Contains(decode[Problem](t, recorder).Message, tc.message) {
+					t.Fatalf("%s: %d %s, want %d and a message about %q", path, recorder.Code, recorder.Body, tc.code, tc.message)
 				}
 			}
 		})

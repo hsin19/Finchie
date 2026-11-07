@@ -1,17 +1,23 @@
 // Single-key shortcuts ("t", "j", "/"), terminal style, must never take a key the browser or a dialog
 // needs. Kept free of runes so it can be tested on its own.
 
-/** Where keys are text: shortcuts would eat letters. */
-const TEXT = "input, textarea, select, [contenteditable]:not([contenteditable='false'])";
+/** Inputs that take no typing; a focused checkbox must not stop the shortcuts. */
+const NOT_TEXT = ["checkbox", "radio", "button", "submit", "reset", "image", "file", "color", "range"].map(type => `:not([type='${type}'])`).join("");
+
+/** Where keys are text: shortcuts would eat letters. A select picks options by typing too. */
+const TEXT = `input${NOT_TEXT}, textarea, select, [contenteditable]:not([contenteditable='false'])`;
 
 /** Controls that Enter or Space activates. */
-const CONTROL = "button, a[href], summary, [role='button'], [role='link'], [role='option'], [role='checkbox'], [role='switch'], [role='tab']";
+const CONTROL = "button, a[href], summary, input, [role='button'], [role='link'], [role='option'], [role='checkbox'], [role='switch'], [role='tab']";
 
 /**
- * Whether a page shortcut may take this key press. Not with Ctrl, Alt, or Meta held; not while
- * typing; not while a modal dialog is open (it owns the keyboard, Esc included); and not Enter or
- * Space on a focused control, which the browser uses to press it.
+ * A key press that belongs to an IME composition, such as the Enter that picks a Zhuyin candidate.
+ * Safari sends that Enter with isComposing already false, but still with keyCode 229.
  */
+export function composing(event: KeyboardEvent): boolean {
+    return event.isComposing || event.keyCode === 229;
+}
+
 export type KeyHandlers = Record<string, (event: KeyboardEvent) => void>;
 
 /**
@@ -33,8 +39,13 @@ export function listen(target: EventTarget, handlers: KeyHandlers, { global = fa
     return () => target.removeEventListener("keydown", listener, options);
 }
 
+/**
+ * Whether a page shortcut may take this key press. Not with Ctrl, Alt, or Meta held; not while
+ * typing or composing; not while a modal dialog is open (it owns the keyboard, Esc included); and
+ * not Enter or Space on a focused control, which the browser uses to press it.
+ */
 export function claims(event: KeyboardEvent): boolean {
-    if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return false;
+    if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || composing(event)) return false;
     const target = event.target instanceof Element ? event.target : null;
     if ((target?.ownerDocument ?? document).querySelector("dialog[open]")) return false;
     if (!target) return true;

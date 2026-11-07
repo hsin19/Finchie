@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/textproto"
+	"strings"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -33,7 +34,7 @@ func newAPIWithParser(t *testing.T, maxUploadBytes int64, parser parserv1.Parser
 		t.Fatal(err)
 	}
 	e := echo.New()
-	RegisterHandlers(e, NewStrictHandler(NewServer(pool, jobs, parser, maxUploadBytes), nil))
+	Register(e, NewServer(pool, jobs, parser, maxUploadBytes))
 	return e, pool
 }
 
@@ -141,6 +142,24 @@ func TestUploadRejectsBadRequests(t *testing.T) {
 	}
 }
 
+func TestUploadThatIsNotAMultipartFormIsABadRequest(t *testing.T) {
+	e, pool := newAPI(t, 1<<20)
+	for _, contentType := range []string{"", "application/json", "multipart/form-data"} {
+		request := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/documents", strings.NewReader(`{"file": "x"}`))
+		if contentType != "" {
+			request.Header.Set("Content-Type", contentType)
+		}
+		recorder := httptest.NewRecorder()
+		e.ServeHTTP(recorder, request)
+		if recorder.Code != http.StatusBadRequest || decode[Problem](t, recorder).Message == "" {
+			t.Errorf("Content-Type %q: %d %s", contentType, recorder.Code, recorder.Body)
+		}
+	}
+	if n := queuedJobs(t, pool); n != 0 {
+		t.Fatalf("queued jobs = %d", n)
+	}
+}
+
 func TestReadEndpoints(t *testing.T) {
 	e, _ := newAPI(t, 1<<20)
 	postFile(t, e, "file", "a.eml", []byte("one"))
@@ -163,14 +182,14 @@ func TestOriginalsKeepOnlySafeContentTypesAndOnlyPDFsOpenInPlace(t *testing.T) {
 	cases := []struct {
 		name, declared string
 		content        []byte
-		stored         string
+		stored, served string
 		disposition    string
 	}{
-		{"statement.pdf", "application/pdf", []byte("%PDF-1.7 ..."), "application/pdf", "inline; filename=statement.pdf"},
-		{"statement.eml", "application/octet-stream", []byte("From: bank\r\n\r\nhello"), "message/rfc822", "attachment; filename=statement.eml"},
+		{"statement.pdf", "application/pdf", []byte("%PDF-1.7 ..."), "application/pdf", "application/pdf", "inline; filename=statement.pdf"},
+		{"statement.eml", "application/octet-stream", []byte("From: bank\r\n\r\nhello"), "message/rfc822", "application/octet-stream", "attachment; filename=statement.eml"},
 		// What the browser declares is ignored: these would run as pages on the app's origin.
-		{"page.html", "text/html", []byte("<script>alert(1)</script>"), "application/octet-stream", "attachment; filename=page.html"},
-		{"image.svg", "image/svg+xml", []byte(`<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>`), "application/octet-stream", "attachment; filename=image.svg"},
+		{"page.html", "text/html", []byte("<script>alert(1)</script>"), "application/octet-stream", "application/octet-stream", "attachment; filename=page.html"},
+		{"image.svg", "image/svg+xml", []byte(`<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>`), "application/octet-stream", "application/octet-stream", "attachment; filename=image.svg"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -180,7 +199,7 @@ func TestOriginalsKeepOnlySafeContentTypesAndOnlyPDFsOpenInPlace(t *testing.T) {
 			}
 			recorder := get(t, e, fmt.Sprintf("/api/documents/%d/content", doc.Id))
 			header := recorder.Header()
-			if recorder.Code != http.StatusOK || header.Get("Content-Type") != tc.stored ||
+			if recorder.Code != http.StatusOK || header.Get("Content-Type") != tc.served ||
 				header.Get("Content-Disposition") != tc.disposition || header.Get("X-Content-Type-Options") != "nosniff" {
 				t.Fatalf("content: %d %v", recorder.Code, header)
 			}

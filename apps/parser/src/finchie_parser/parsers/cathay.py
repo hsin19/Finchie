@@ -14,6 +14,7 @@ _CLOSING = re.compile(r"^(\d{3}/\d\d/\d\d) [\d,]+$", re.ASCII)
 _DUE = re.compile(r"將於\s*(\d{3}/\d\d/\d\d)", re.ASCII)
 _NEW_CHARGES = re.compile(r"^(?:正卡|附卡)本期消費 (-?[\d,]+)$", re.ASCII)
 _TOTAL_DUE = re.compile(r"^本期應繳總額 (-?[\d,]+)$", re.ASCII)
+_PAYMENTS = re.compile(r"^繳款小計 (-?[\d,]+)$", re.ASCII)
 # "<date> <posted> <description> <amount> <card last 4> [<wallet card last 4>] <country> <currency>
 #  [<foreign amount> [<conversion date>]]"; a refund's foreign amount is negative too.
 _ROW = re.compile(
@@ -26,19 +27,20 @@ _ROW = re.compile(
 _PLAIN_ROW = re.compile(
     r"^(?P<date>\d\d/\d\d) (?P<posted>\d\d/\d\d) (?P<desc>.+?) (?P<amt>-?[\d,]+) (?P<card>\d{4})$", re.ASCII
 )
-_PAYMENT = re.compile(r"^(?P<date>\d\d/\d\d) (?P<posted>\d\d/\d\d) (?P<desc>\D+) (?P<amt>-[\d,]+)$", re.ASCII)
+# "<date> <posted> <description> <negative amount>": no card. The description can hold digits ("ATM轉帳 822").
+_PAYMENT = re.compile(r"^(?P<date>\d\d/\d\d) (?P<posted>\d\d/\d\d) (?P<desc>.+?) (?P<amt>-[\d,]+)$", re.ASCII)
 
 
 class CathayParser(StatementParser):
     name = "cathay.credit_card"
-    version = "3"
+    version = "4"
     institution = "cathay"
     filename_pattern = re.compile(r"^信用卡電子帳單消費明細_\d+\.pdf$")
     text_marker = "國泰世華"
 
     def matches_text(self, document: Document) -> bool:
         # The bank's name sits in an image on page 1; the fine print on page 2 names it.
-        return any(self.text_marker in text for text in document.page_texts()[:2])
+        return any(self.text_marker in text for text in document.page_texts(2))
 
     def parse(self, document: Document, ocr: Ocr | None) -> Parsed:
         texts = document.page_texts()
@@ -48,11 +50,14 @@ class CathayParser(StatementParser):
         # One subtotal per card holder (正卡, 附卡). None until one is read: taking a missing subtotal as
         # zero would let a layout change that also hides every row reconcile as balanced and empty.
         new_charges: Decimal | None = None
+        payments: Decimal | None = None
 
         transactions: list[Transaction] = []
         for line in (line for text in texts for line in text.splitlines()):
             if match := _NEW_CHARGES.match(line):
                 new_charges = (new_charges or Decimal(0)) + amount(match.group(1))
+            elif match := _PAYMENTS.match(line):
+                payments = (payments or Decimal(0)) + amount(match.group(1))
             elif match := _ROW.match(line):
                 value = amount(match["amt"])
                 foreign = match["cur"] != "TWD"
@@ -95,6 +100,11 @@ class CathayParser(StatementParser):
 
         if new_charges is None:
             raise LayoutError("statement field not found: 本期消費")
+        warnings: list[str] = []
+        paid = sum((tx.amount for tx in transactions if tx.kind is Kind.PAYMENT), Decimal(0))
+        # Payments are not part of the new charges, so only this subtotal shows a payment line was missed.
+        if payments is not None and paid != payments:
+            warnings.append(f"payment lines add up to {paid}, but 繳款小計 is {payments}")
 
         statement = Statement(
             institution=self.institution,
@@ -105,7 +115,7 @@ class CathayParser(StatementParser):
             transactions=transactions,
             reconciliation=Reconciliation(sum_new_charges(transactions), new_charges, "本期消費"),
         )
-        return Parsed(statement)
+        return Parsed(statement, warnings)
 
 
 def _plain_kind(description: str, value: Decimal) -> Kind:

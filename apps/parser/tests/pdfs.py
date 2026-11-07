@@ -11,6 +11,21 @@ PNG = b"\x89PNG\r\n\x1a\n fake image"
 def blank_pdf(user_password: str | None = None) -> bytes:
     pdf = pikepdf.new()
     pdf.add_blank_page()
+    return _save(pdf, user_password)
+
+
+def text_pdf(*pages: str, user_password: str | None = None) -> bytes:
+    """A page per argument, each a line of ASCII text that pdfplumber reads back."""
+    pdf = pikepdf.new()
+    font = pikepdf.Dictionary(Type=pikepdf.Name.Font, Subtype=pikepdf.Name.Type1, BaseFont=pikepdf.Name.Helvetica)
+    for text in pages:
+        page = pdf.add_blank_page()
+        page.Resources = pikepdf.Dictionary(Font=pikepdf.Dictionary(F1=font))
+        page.Contents = pdf.make_stream(b"BT /F1 12 Tf 72 720 Td " + pikepdf.String(text).unparse() + b" Tj ET")
+    return _save(pdf, user_password)
+
+
+def _save(pdf: pikepdf.Pdf, user_password: str | None) -> bytes:
     buffer = io.BytesIO()
     if user_password is None:
         pdf.save(buffer)

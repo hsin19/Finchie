@@ -2,6 +2,7 @@
 import type { Statement } from "#lib/api/client.js";
 import {
     byClosingMonth,
+    fxFeeShare,
     pendingInstitutions,
     percentChange,
     totalDue,
@@ -63,7 +64,7 @@ const kindTotal = (kind: string) => data.current.byKind.find(k => k.kind === kin
 const spend = $derived(data.current.sum);
 const spendChange = $derived(percentChange(spend, data.previous.sum));
 const fxFee = $derived(kindTotal("foreign_transaction_fee")?.amount ?? "0");
-const fxShare = $derived(approx(data.overseas.sum) > 0 ? (approx(fxFee) / approx(data.overseas.sum)) * 100 : undefined);
+const fxShare = $derived(fxFeeShare(data.current, data.overseas));
 const rebate = $derived(kindTotal("rebate"));
 
 const cards = $derived([...data.current.byCard].sort((a, b) => approx(b.amount) - approx(a.amount)));
@@ -114,7 +115,7 @@ const names = (ids: string[]) => ids.map(i => institution(i).name).join("、");
     <div class="panel flex flex-col gap-1 p-3 md:p-3.5">
         <div class="text-[10px] tracking-[0.12em] text-mute">FX_FEE · 海外手續費</div>
         <div class="text-[20px] font-bold text-neg md:text-[24px]">{formatAmount(fxFee)}</div>
-        <div class="text-[11px] text-dim">{fxShare === undefined ? "沒有海外消費" : `${fxShare.toFixed(1)}% of overseas ${formatAmount(data.overseas.sum)}`}</div>
+        <div class="text-[11px] text-dim">{fxShare === undefined ? "沒有海外消費" : `${fxShare.percent.toFixed(1)}% of overseas ${formatAmount(fxShare.of)}`}</div>
     </div>
     <div class="panel flex flex-col gap-1 p-3 md:p-3.5">
         <div class="text-[10px] tracking-[0.12em] text-mute">REWARD · 回饋</div>

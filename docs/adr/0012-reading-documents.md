@@ -7,8 +7,8 @@ A document opens in the browser without its PDF password, so statements are read
 | | |
 |---|---|
 | Who opens it | The parser (`OpenDocument`). It already reads e-mails, and it is the only service that holds the PDF passwords (ADR 0006). The backend sends it the stored original on every request and passes on what comes back |
-| Statement PDF | The parser marks one file primary: the PDF whose name a bank parser knows as its statement, as parsing picks it, else the first PDF. `/preview/pdf` serves it, so a link needs no second step through the e-mail |
-| Storage | Nothing decrypted is stored. The database keeps the document exactly as uploaded, and `/api/documents/{id}/content` still serves it |
+| Statement PDF | The parser marks one file primary: the PDF whose name a bank parser knows as its statement, as parsing picks it, else the first PDF (since 2.6.0 parsing and previews share one selection: a known name counts only when the PDF's text carries that bank's marker, then any PDF recognized by its text; locked or unreadable PDFs no longer stop the search). `/preview/pdf` serves it, so a link needs no second step through the e-mail |
+| Storage | Nothing decrypted is stored. The database keeps the document exactly as uploaded, and `/api/documents/{id}/content` still serves it (since 2.6.0 the decrypted responses also carry `Cache-Control: no-store`, so the browser's cache does not keep them either) |
 | PDFs | Decrypted with the first password that opens them, as for parsing. One that none opens comes back as received, marked locked, and the viewer asks for its password |
 | Other attachments | Download as `application/octet-stream` with `nosniff`, like originals: only a PDF is shown in place on the app's origin |
 | E-mail body | HTML when the message has it, else plain text wrapped in a page. Images the HTML references by Content-ID are embedded as `data:` URIs. `/preview/body` serves it into an iframe, as UTF-8 whatever the HTML's own `<meta charset>` says |

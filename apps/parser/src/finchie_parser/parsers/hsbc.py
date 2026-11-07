@@ -23,6 +23,8 @@ _FX_ROW = re.compile(
 # Fees, payments, and the annual fee: no country or currency.
 _PLAIN_ROW = re.compile(r"^(?P<date>\d\d/\d\d) (?P<posted>\d\d/\d\d) (?P<amt>-?[\d,]+)$", re.ASCII)
 _NUMBER = re.compile(r"^-?[\d,]+$", re.ASCII)
+_FOREIGN_FEE = re.compile(r"國外交易(?:服務|手續)費")
+_INTEREST_AND_CHARGES = ("利息", "循環", "違約金", "其他費用")
 
 # Unlabelled amounts on the transaction pages, in order:
 #   1 previous balance, [payment and adjustment rows], 2 payments subtotal, 3 carried balance,
@@ -45,7 +47,7 @@ class _Row:
 
 class HsbcParser(StatementParser):
     name = "hsbc.credit_card"
-    version = "1"
+    version = "2"
     institution = "hsbc"
     filename_pattern = re.compile(r"^eStatement_\d{6}\.pdf$", re.IGNORECASE)
     text_marker = "HSBC"
@@ -103,12 +105,8 @@ class HsbcParser(StatementParser):
         description = row.description
         if foreign:
             kind = Kind.REFUND if value < 0 else Kind.PURCHASE
-        elif not row.new_charge and value < 0:
-            kind = Kind.PAYMENT
-        elif "年費" in description:
-            kind = Kind.ANNUAL_FEE
         else:
-            kind = Kind.FOREIGN_TRANSACTION_FEE
+            kind = _plain_kind(description, value, row.new_charge)
         currency = match["cur"] if foreign else ""
         return Transaction(
             transaction_date=month_day(match["date"], closing),
@@ -120,6 +118,24 @@ class HsbcParser(StatementParser):
             original_currency=currency if currency != "TWD" else "",
             country=_alpha2(match["country"]) if foreign else "",
         )
+
+
+def _plain_kind(description: str, value: Decimal, new_charge: bool) -> Kind:
+    # Words before sections: the payments section also lists credits that are not payments, such as the
+    # annual fee's waiver.
+    if "年費" in description:
+        return Kind.ANNUAL_FEE
+    if "回饋" in description or "折抵" in description:
+        return Kind.REBATE
+    if _FOREIGN_FEE.search(description):
+        return Kind.FOREIGN_TRANSACTION_FEE
+    # No kind fits interest or the bank's other charges; every other parser counts them as purchases.
+    if any(word in description for word in _INTEREST_AND_CHARGES):
+        return Kind.REFUND if value < 0 else Kind.PURCHASE
+    # No such word (OCR off or too noisy): what nearly every plain row is, a payment or a foreign transaction fee.
+    if not new_charge and value < 0:
+        return Kind.PAYMENT
+    return Kind.FOREIGN_TRANSACTION_FEE
 
 
 def _attach_descriptions(document: Document, rows: list[_Row], ocr: Ocr) -> list[str]:

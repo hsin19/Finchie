@@ -33,17 +33,24 @@ tasks:
   proto:check:
     desc: Fail on unformatted, unlinted, or backward-incompatible proto changes
     cmds:
-      - '{{.BUF}} format --diff --exit-code'
-      - '{{.BUF}} lint'
+      - task: proto:lint
       - task: proto:breaking
 
-  proto:breaking:
-    desc: Fail on backward-incompatible changes against main
-    # Skipped until main has contracts to compare against.
-    status:
-      - '! git cat-file -e main:proto/finchie 2>/dev/null'
+  proto:lint:
+    desc: Fail on unformatted or unlinted proto files
     cmds:
-      - '{{.BUF}} breaking --against ".git#branch=main"'
+      - '{{.BUF}} format --diff --exit-code'
+      - '{{.BUF}} lint'
+
+  proto:breaking:
+    desc: Fail on backward-incompatible changes against a git ref (AGAINST=<ref>, default main)
+    vars:
+      AGAINST: '{{.AGAINST | default "main"}}'
+    # Skipped while the ref has no contracts to compare against.
+    status:
+      - '! git cat-file -e "{{.AGAINST}}:proto/finchie" 2>/dev/null'
+    cmds:
+      - '{{.BUF}} breaking --against ".git#ref={{.AGAINST}}"'
 
   shellcheck:
     desc: Lint the repository's shell scripts

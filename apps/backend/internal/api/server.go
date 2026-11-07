@@ -11,6 +11,7 @@ import (
 	"math"
 	"mime"
 	"mime/multipart"
+	"net/http"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -19,6 +20,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/labstack/echo/v5"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 	"github.com/riverqueue/river"
 
@@ -41,6 +43,28 @@ func NewServer(pool *pgxpool.Pool, jobs *river.Client[pgx.Tx], parser parserv1.P
 }
 
 var _ StrictServerInterface = (*Server)(nil)
+
+// Register mounts the API. Use it instead of the generated RegisterHandlers, which would leave out
+// notMultipartIsBadRequest.
+func Register(router EchoRouter, server *Server) {
+	RegisterHandlersWithOptions(router, NewStrictHandler(server, nil), RegisterHandlersOptions{
+		OperationMiddlewares: map[string][]echo.MiddlewareFunc{"uploadDocument": {notMultipartIsBadRequest}},
+	})
+}
+
+// notMultipartIsBadRequest answers an upload that is not a multipart form with the spec's 400. The
+// generated handler opens the form before UploadDocument runs and returns that error as it is,
+// which Echo would answer with a 500.
+func notMultipartIsBadRequest(next echo.HandlerFunc) echo.HandlerFunc {
+	return func(c *echo.Context) error {
+		err := next(c)
+		if errors.Is(err, http.ErrNotMultipart) || errors.Is(err, http.ErrMissingBoundary) {
+			problem := UploadDocument400JSONResponse{ProblemJSONResponse{Message: err.Error()}}
+			return problem.VisitUploadDocumentResponse(c.Response())
+		}
+		return err
+	}
+}
 
 func (s *Server) UploadDocument(ctx context.Context, request UploadDocumentRequestObject) (UploadDocumentResponseObject, error) {
 	file, err := readFilePart(request.Body, s.maxUploadBytes)
@@ -143,23 +167,32 @@ func (s *Server) GetDocumentContent(ctx context.Context, request GetDocumentCont
 	if err != nil {
 		return nil, fmt.Errorf("get document %d content: %w", request.Id, err)
 	}
-	// The original comes from the app's own origin: only a PDF may open in place. Anything else
-	// downloads, and nosniff stops the browser from guessing its way to HTML.
-	disposition := "attachment"
-	if row.ContentType == contentTypePDF {
-		disposition = "inline"
-	}
-	disposition = mime.FormatMediaType(disposition, map[string]string{"filename": row.Filename})
-	nosniff := "nosniff"
+	served := serveFile(row.ContentType, row.Filename)
 	return GetDocumentContent200AsteriskResponse{
 		Body:          bytes.NewReader(row.Content),
-		ContentType:   row.ContentType,
+		ContentType:   served.contentType,
 		ContentLength: int64(len(row.Content)),
 		Headers: GetDocumentContent200ResponseHeaders{
-			ContentDisposition:  &disposition,
-			XContentTypeOptions: &nosniff,
+			ContentDisposition:  &served.disposition,
+			XContentTypeOptions: &served.nosniff,
 		},
 	}, nil
+}
+
+type servedFile struct {
+	contentType, disposition, nosniff string
+}
+
+// serveFile decides how an original or an opened file is sent. It comes from the app's own origin,
+// so only a PDF may open in place; anything else downloads as application/octet-stream, whatever it
+// claims to be, and nosniff stops the browser from guessing its way to HTML.
+func serveFile(contentType, filename string) servedFile {
+	served := servedFile{contentType: contentTypeOther, disposition: "attachment", nosniff: "nosniff"}
+	if contentType == contentTypePDF {
+		served.contentType, served.disposition = contentTypePDF, "inline"
+	}
+	served.disposition = mime.FormatMediaType(served.disposition, map[string]string{"filename": filename})
+	return served
 }
 
 func (s *Server) ListStatements(ctx context.Context, request ListStatementsRequestObject) (ListStatementsResponseObject, error) {

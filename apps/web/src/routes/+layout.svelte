@@ -12,6 +12,8 @@ import {
     shortDateTime,
 } from "#lib/dates.js";
 import { onKeys } from "#lib/keys.svelte.js";
+import { carriedQueries } from "#lib/nav.js";
+import { poll } from "#lib/poll.js";
 import {
     goto,
     invalidate,
@@ -25,21 +27,18 @@ let { data, children }: LayoutProps = $props();
 let help = $state(false);
 
 // While the parser works, keep refreshing: every page shows document status.
-$effect(() => {
-    if (!data.documents.some(d => d.status === "pending")) return;
-    const timer = setTimeout(() => void invalidate(LEDGER), 1500);
-    return () => clearTimeout(timer);
-});
+const polling = poll(() => void invalidate(LEDGER), { hidden: document.hidden });
+$effect(() => polling.update(data.documents.filter(d => d.status === "pending").map(d => d.id).join()));
+$effect(() => () => polling.stop());
 
 let palette = $state(false);
 
 // Switching between statements and transactions keeps the selected month; the overview has none.
-const month = $derived(page.url.searchParams.get("m"));
-const query = $derived<"" | `?m=${string}`>(month ? `?m=${month}` : "");
+const carried = $derived(carriedQueries(page.route.id, page.url.searchParams));
 const nav = $derived([
     { key: "o", label: "總覽", href: resolve("/"), current: page.route.id === "/" },
-    { key: "s", label: "帳單", href: resolve(`/statements${query}`), current: /^\/(statements|documents)/.test(page.route.id ?? "") },
-    { key: "t", label: "交易", href: resolve(`/transactions${query}`), current: page.route.id === "/transactions" },
+    { key: "s", label: "帳單", href: resolve(`/statements${carried.statements}`), current: /^\/(statements|documents)/.test(page.route.id ?? "") },
+    { key: "t", label: "交易", href: resolve(`/transactions${carried.transactions}`), current: page.route.id === "/transactions" },
     { key: "u", label: "上傳", href: resolve("/upload"), current: page.route.id === "/upload" },
 ]);
 
@@ -69,7 +68,7 @@ const commands: Command[] = $derived([
 ]);
 
 async function searchTransactions() {
-    await goto(resolve(`/transactions${query}`));
+    await goto(resolve(`/transactions${carried.transactions}`));
     document.getElementById("q")?.focus();
 }
 
@@ -96,6 +95,7 @@ function onkeydown(event: KeyboardEvent) {
 </script>
 
 <svelte:window {onkeydown} />
+<svelte:document onvisibilitychange={() => polling.visible(!document.hidden)} />
 
 <svelte:head>
     <title>{commandText(prompt)}</title>

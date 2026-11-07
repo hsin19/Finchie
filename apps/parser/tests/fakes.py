@@ -15,8 +15,8 @@ class FakeDocument:
     pages: list[str]
     filename: str = "fake.pdf"
 
-    def page_texts(self) -> list[str]:
-        return self.pages
+    def page_texts(self, limit: int | None = None) -> list[str]:
+        return self.pages[:limit]
 
     def page_lines(self, page_index: int) -> list[TextLine]:
         # Like pdfplumber: a thin band at each line's baseline.

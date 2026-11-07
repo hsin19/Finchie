@@ -5,6 +5,8 @@ import unicodedata
 from datetime import date, timedelta
 from decimal import Decimal
 
+from finchie_parser.errors import LayoutError
+
 _SPACES = re.compile(r"\s+")
 
 
@@ -21,20 +23,22 @@ def iso_date(text: str) -> date:
 
 
 def month_day(text: str, closing: date) -> date:
-    """`09/07` dated relative to the statement's closing date.
+    """`09/07` as the latest such date at most a month after the statement's closing date.
 
-    Statement lines never postdate the closing date by much, so a date that
-    would land more than a month after it belongs to the previous year
-    (a December purchase on a January statement).
+    Lines fall on both sides of a year end (a December purchase on a January
+    statement, a January posting on a December one), and an older line, such as
+    an instalment's original purchase, stays in the past.
     """
     month, day = (int(part) for part in text.split("/"))
-    try:
-        candidate = date(closing.year, month, day)
-    except ValueError:  # 02/29 in a non-leap closing year
-        return date(closing.year - 1, month, day)
-    if candidate > closing + timedelta(days=31):
-        return date(closing.year - 1, month, day)
-    return candidate
+    latest = closing + timedelta(days=31)
+    for year in (latest.year, latest.year - 1):
+        try:
+            candidate = date(year, month, day)
+        except ValueError:
+            continue
+        if candidate <= latest:
+            return candidate
+    raise LayoutError(f"no date {text} in the year up to {latest}")
 
 
 def amount(text: str) -> Decimal:

@@ -195,3 +195,80 @@ func TestTransientParserErrorsRetryUntilAttemptsRunOut(t *testing.T) {
 		t.Fatalf("status after the last attempt = %s", got)
 	}
 }
+
+func TestStoreErrorsFailTheDocumentOnTheLastAttempt(t *testing.T) {
+	pool := testdb.Pool(t)
+	id := addDocument(t, pool, "rejected.eml")
+	statement := sampleStatement(true)
+	// Valid for the parser contract, but Postgres rejects it: currency is CHAR(3).
+	statement.Currency = "TWDX"
+	worker := NewWorker(pool, parsed(statement), time.Minute)
+
+	err := worker.Work(t.Context(), job(id, 1, 6))
+	var cancel *rivertype.JobCancelError
+	if err == nil || errors.As(err, &cancel) {
+		t.Fatalf("first attempt: err = %v, want a plain error so River retries", err)
+	}
+	if got := document(t, pool, id).Status; got != StatusPending {
+		t.Fatalf("status after the first attempt = %s", got)
+	}
+
+	if err := worker.Work(t.Context(), job(id, 6, 6)); !errors.As(err, &cancel) {
+		t.Fatalf("last attempt: err = %v, want a cancelled job", err)
+	}
+	if doc := document(t, pool, id); doc.Status != StatusFailed || doc.Error == nil || *doc.Error == "" {
+		t.Fatalf("document after the last attempt = %+v", doc)
+	}
+	if countRows(t, pool, "statements") != 0 {
+		t.Fatal("a rejected statement must not be stored")
+	}
+}
+
+func TestWorkerFailsAResponseWithANonFiniteAmount(t *testing.T) {
+	pool := testdb.Pool(t)
+	id := addDocument(t, pool, "nan.eml")
+	statement := sampleStatement(true)
+	statement.Transactions[0].Amount.Value = "NaN"
+
+	err := NewWorker(pool, parsed(statement), time.Minute).Work(t.Context(), job(id, 1, 6))
+
+	var cancel *rivertype.JobCancelError
+	if !errors.As(err, &cancel) {
+		t.Fatalf("err = %v, want a cancelled job", err)
+	}
+	if doc := document(t, pool, id); doc.Status != StatusFailed || doc.Error == nil {
+		t.Fatalf("document = %+v", doc)
+	}
+	if countRows(t, pool, "statements") != 0 {
+		t.Fatal("a statement with a NaN amount must not be stored")
+	}
+}
+
+// stoppingParser is a parse interrupted because the backend is stopping: River cancels the job's
+// context mid-call, and the call fails with CANCELLED.
+type stoppingParser struct {
+	*fakeParser
+	stop context.CancelFunc
+}
+
+func (p stoppingParser) ParseDocument(ctx context.Context, in *parserv1.ParseDocumentRequest, opts ...grpc.CallOption) (*parserv1.ParseDocumentResponse, error) {
+	p.stop()
+	return p.fakeParser.ParseDocument(ctx, in, opts...)
+}
+
+func TestAParseCancelledOnShutdownIsRetried(t *testing.T) {
+	pool := testdb.Pool(t)
+	id := addDocument(t, pool, "interrupted.eml")
+	ctx, stop := context.WithCancel(t.Context())
+	defer stop()
+
+	err := NewWorker(pool, stoppingParser{failing(codes.Canceled), stop}, time.Minute).Work(ctx, job(id, 1, 6))
+
+	var cancel *rivertype.JobCancelError
+	if err == nil || errors.As(err, &cancel) {
+		t.Fatalf("err = %v, want a plain error so River retries", err)
+	}
+	if doc := document(t, pool, id); doc.Status != StatusPending || doc.Error != nil {
+		t.Fatalf("document = %+v, want it left pending for the next attempt", doc)
+	}
+}
