@@ -295,7 +295,7 @@ onKeys({
 
 <section class="panel flex flex-col gap-2.5 p-3 md:p-3.5">
     <div class="flex items-center gap-2 rounded-[4px] border border-line-strong bg-ground px-2.5">
-        <label for="q" class="text-accent whitespace-nowrap">[/] 搜尋</label>
+        <label for="q" class="whitespace-nowrap"><span class="text-accent">[/]</span> 搜尋</label>
         <input
             id="q"
             type="search"
@@ -306,7 +306,7 @@ onKeys({
             oninput={onSearchInput}
             onkeydown={onSearchKeydown}
         />
-        <span class="hidden text-[12px] text-mute sm:inline">[esc] 清除</span>
+        <span class="hidden text-[12px] text-mute sm:inline"><span class="text-accent">[esc]</span> 清除</span>
     </div>
     <div class="flex flex-wrap items-center gap-2">
         <MonthSelect all months={data.months} value={data.period} onchange={m => void navigate({ m })} />
@@ -326,7 +326,7 @@ onKeys({
             {#each kindOrder as kind (kind)}
                 {@const on = activeKinds.has(kind)}
                 <button type="button" aria-pressed={on} class="control shrink-0 {on ? 'pressed' : 'text-mute'}" onclick={() => toggleKind(kind)}>
-                    {on ? "[x]" : "[ ]"} {kinds[kind].short} <span class="text-mute">{kindCounts.get(kind)?.count ?? 0}</span>
+                    {kinds[kind].short} <span class="text-mute">{kindCounts.get(kind)?.count ?? 0}</span>
                 </button>
             {/each}
         </div>
@@ -447,8 +447,8 @@ onKeys({
             <span>{first}–{last} / {data.result.total}</span>
             <span class="flex items-center gap-2">
                 <span class="hidden lg:inline"><span class="text-accent">[j/k]</span> 上下移動 · <span class="text-accent">[enter]</span> 詳細 ·</span>
-                <button type="button" class="control min-h-8" disabled={data.pageNumber <= 1} onclick={() => goPage(data.pageNumber - 1)}>[p] prev</button>
-                <button type="button" class="control min-h-8" disabled={data.pageNumber >= pages} onclick={() => goPage(data.pageNumber + 1)}>[n] next</button>
+                <button type="button" class="control min-h-8" disabled={data.pageNumber <= 1} onclick={() => goPage(data.pageNumber - 1)}><span class="text-accent">[p]</span> prev</button>
+                <button type="button" class="control min-h-8" disabled={data.pageNumber >= pages} onclick={() => goPage(data.pageNumber + 1)}><span class="text-accent">[n]</span> next</button>
             </span>
         </div>
     </section>
@@ -457,7 +457,7 @@ onKeys({
         <aside aria-label="交易詳細" class="panel hidden self-start p-3.5 lg:sticky lg:top-3 lg:block">
             <div class="mb-3 flex items-center justify-between">
                 <h2 class="label">TXN #{selected.id}</h2>
-                <button type="button" class="text-mute hover:text-ink" aria-label="關閉詳細" onclick={() => (selectedId = undefined)}>[x]</button>
+                <button type="button" class="text-mute hover:text-ink" aria-label="關閉詳細" onclick={() => (selectedId = undefined)}><span class="text-accent">[x]</span></button>
             </div>
             {@render detail(selected)}
         </aside>
@@ -468,7 +468,7 @@ onKeys({
     {#if selected}
         <div class="flex items-center justify-between border-b border-line px-4 py-3">
             <h2 class="label">TXN #{selected.id}</h2>
-            <button type="button" class="text-mute" aria-label="關閉" onclick={() => (sheet = false)}>[x]</button>
+            <button type="button" class="text-mute" aria-label="關閉" onclick={() => (sheet = false)}><span class="text-accent">[esc]</span></button>
         </div>
         <div class="p-4">{@render detail(selected)}</div>
     {/if}

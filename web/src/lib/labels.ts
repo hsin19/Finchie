@@ -67,17 +67,17 @@ interface Status {
     tone: Tone;
 }
 
-/** Fixed-width tags, so a column of them lines up: "[ OK ]", "[RUN ]". */
+/** A short word after a coloured dot ("● ok"); square brackets are for keys only. */
 export const statuses: Record<DocumentStatus | "uploading" | "same" | "skipped", Status> = {
-    uploading: { tag: "[UP  ]", label: "上傳中", tone: "accent" },
-    same: { tag: "[SAME]", label: "上傳過了", tone: "mute" },
-    pending: { tag: "[RUN ]", label: "解析中", tone: "accent" },
-    parsed: { tag: "[ OK ]", label: "已對帳", tone: "pos" },
-    needs_review: { tag: "[CHK ]", label: "需確認", tone: "neg" },
-    duplicate: { tag: "[DUP ]", label: "重複帳單", tone: "mute" },
-    failed: { tag: "[ERR ]", label: "解析失敗", tone: "neg" },
+    uploading: { tag: "up", label: "上傳中", tone: "accent" },
+    same: { tag: "same", label: "上傳過了", tone: "mute" },
+    pending: { tag: "run", label: "解析中", tone: "accent" },
+    parsed: { tag: "ok", label: "已對帳", tone: "pos" },
+    needs_review: { tag: "chk", label: "需確認", tone: "neg" },
+    duplicate: { tag: "dup", label: "重複帳單", tone: "mute" },
+    failed: { tag: "err", label: "解析失敗", tone: "neg" },
     /** Failed because no parser handles that kind of file: nothing to fix or retry. */
-    skipped: { tag: "[SKIP]", label: "不支援", tone: "mute" },
+    skipped: { tag: "skip", label: "不支援", tone: "mute" },
 };
 
 /** A document's tag. A failure because no parser handles the file is "skipped": nothing to retry. */

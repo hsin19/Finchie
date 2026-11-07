@@ -57,9 +57,15 @@ const views = ["chart", "table"] as const;
     <div class="flex flex-wrap items-baseline justify-between gap-2">
         <h2 class="label">TREND · 每月帳單</h2>
         <div role="group" aria-label="檢視方式" class="flex gap-1.5 text-[12px]">
-            {#each views as option (option)}
-                <button type="button" aria-pressed={view === option} class={view === option ? "text-accent" : "text-mute hover:text-ink"} onclick={() => (view = option)}>
-                    [{option}]
+            {#each views as option, i (option)}
+                {#if i > 0}<span class="text-mute">·</span>{/if}
+                <button
+                    type="button"
+                    aria-pressed={view === option}
+                    class={view === option ? "text-accent underline underline-offset-4" : "text-mute hover:text-ink"}
+                    onclick={() => (view = option)}
+                >
+                    {option}
                 </button>
             {/each}
         </div>

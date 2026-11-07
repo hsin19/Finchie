@@ -89,15 +89,15 @@ const names = (ids: string[]) => ids.map(i => institution(i).name).join("、");
 </script>
 
 <div class="flex flex-wrap items-center gap-2">
-    <button type="button" class="control" disabled={!older} onclick={() => openMonth(older)}>[p] prev</button>
+    <button type="button" class="control" disabled={!older} onclick={() => openMonth(older)}><span class="text-accent">[p]</span> prev</button>
     <MonthSelect
         months={data.closingMonths}
         value={data.month}
         onchange={m => void goto(m === "all" ? resolve("/statements?all") : resolve(`/statements?m=${m}`))}
     />
-    <button type="button" class="control" disabled={!newer} onclick={() => openMonth(newer)}>[n] next</button>
+    <button type="button" class="control" disabled={!newer} onclick={() => openMonth(newer)}><span class="text-accent">[n]</span> next</button>
     <span class="text-[12px] text-mute">這個月結帳的帳單</span>
-    <a href={resolve("/statements?all")} class="ml-auto text-[12px]">[a] 全部帳單 →</a>
+    <a href={resolve("/statements?all")} class="ml-auto text-[12px] text-dim hover:text-ink"><span class="text-accent">[a]</span> 全部帳單 →</a>
 </div>
 
 <div class="grid grid-cols-2 gap-2 md:grid-cols-4 md:gap-3">

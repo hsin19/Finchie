@@ -1,6 +1,10 @@
 <script lang="ts">
 import "./layout.css";
 import { LEDGER } from "#lib/api/client.js";
+import {
+    commandLine,
+    commandText,
+} from "#lib/command.js";
 import CommandPalette, { type Command } from "#lib/components/CommandPalette.svelte";
 import HelpDialog from "#lib/components/HelpDialog.svelte";
 import {
@@ -39,17 +43,7 @@ const nav = $derived([
     { key: "u", label: "上傳", href: resolve("/upload"), current: page.route.id === "/upload" },
 ]);
 
-// The header reads like a shell prompt: "finchie ~/transactions --period 2026-10".
-const prompt = $derived.by(() => {
-    const custom = (page.data as { prompt?: string; }).prompt;
-    const path = custom ?? (page.url.pathname === "/" ? "overview" : page.url.pathname.slice(1));
-    const params = page.url.searchParams;
-    const flags = [...new Set(params.keys())].map(key => ({
-        name: key === "all" ? "-a" : `--${key === "m" ? "period" : key}`,
-        value: key === "overseas" || key === "all" ? "" : params.getAll(key).join(","),
-    }));
-    return { path, flags };
-});
+const prompt = $derived(commandLine(page.url.pathname, page.url.searchParams, (page.data as { command?: string; }).command));
 
 // "Switch month": on the transactions page it keeps the other filters; elsewhere it opens that
 // month's statements.
@@ -104,14 +98,14 @@ function onkeydown(event: KeyboardEvent) {
 <svelte:window {onkeydown} />
 
 <svelte:head>
-    <title>finchie ~/{prompt.path}</title>
+    <title>{commandText(prompt)}</title>
 </svelte:head>
 
 <div class="mx-auto flex min-h-dvh max-w-[1240px] flex-col gap-3 px-3.5 pt-3.5 pb-28 md:px-5 md:pt-5 md:pb-6">
     <header class="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-line pb-2.5 md:panel md:px-3.5 md:py-2.5">
         <div class="min-w-0 grow truncate text-[14px]">
             <a href={resolve("/")} class="font-bold text-accent">finchie</a>
-            <span class="text-mute">~/</span>{prompt.path}{#each prompt.flags as flag (flag.name)}
+            {prompt.command}{#each prompt.flags as flag (flag.name)}
                 <span class="text-mute">{` ${flag.name}`}</span>{flag.value ? ` ${flag.value}` : ""}
             {/each}
         </div>
@@ -140,12 +134,12 @@ function onkeydown(event: KeyboardEvent) {
         {#if parser}<span>parser v{parser}</span>{/if}
         {#if lastUpload}<span>last upload {shortDateTime(lastUpload.receivedAt)}</span>{/if}
         <span>{data.statements.length} statements · {data.documents.length} documents</span>
-        <span class="ml-auto"><button type="button" class="text-mute hover:text-ink" onclick={() => (help = true)}>[?] 快捷鍵</button> · <button
+        <span class="ml-auto"><button type="button" class="text-mute hover:text-ink" onclick={() => (help = true)}><span class="text-accent">[?]</span> 快捷鍵</button> · <button
                 type="button"
                 class="text-mute hover:text-ink"
                 onclick={() => (palette = true)}
             >
-                [⌘K] 指令
+                <span class="text-accent">[⌘K]</span> 指令
             </button></span>
     </footer>
 </div>

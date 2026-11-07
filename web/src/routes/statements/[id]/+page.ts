@@ -22,6 +22,6 @@ export const load = (async ({ fetch, params }) => {
         statement,
         transactions: need(transactions),
         document: need(document),
-        prompt: `statements/${statement.institution}/${monthOf(statement.closingDate)}`,
+        command: `statements show ${statement.institution}/${monthOf(statement.closingDate)}`,
     };
 }) satisfies PageLoad;

@@ -19,7 +19,7 @@ The web app is a SvelteKit single-page app in `web/`, embedded in the backend bi
 
 ### Design: "terminal"
 
-Dark only, monospace everywhere, one amber accent. Pages read like a shell: the header is a prompt (`finchie ~/transactions --period 2026-10`), statuses are fixed-width tags, section labels are upper-case codes with a Chinese gloss (`SPEND · 本月消費`), and bars are dashed meters.
+Dark only, monospace everywhere, one amber accent. Pages read like a shell: the header is the command that shows the page (`finchie transactions --period 2026-10`, flags spelled out in full), statuses are a coloured dot and a short word (`● ok`), section labels are upper-case codes with a Chinese gloss (`SPEND · 本月消費`), and bars are dashed meters.
 
 | Token | Value | Use |
 |---|---|---|
@@ -30,13 +30,15 @@ Dark only, monospace everywhere, one amber accent. Pages read like a shell: the 
 | `accent` | `#ffb020` | Keys, links, focus, the current page |
 | `pos` / `neg` | `#3ddc97` / `#ff6b6b` | Refunds and rebates / fees and problems |
 
-| Tag | Meaning |
+| Status | Meaning |
 |---|---|
-| `[ OK ]` | Parsed and reconciled |
-| `[RUN ]` / `[UP  ]` | Parsing / uploading |
-| `[CHK ]` | Parsed, but the lines don't add up (`needs_review`) |
-| `[DUP ]` / `[SAME]` | Another document holds this statement / these exact bytes were uploaded before |
-| `[ERR ]` / `[SKIP]` | Parsing failed / no parser handles this kind of file |
+| `● ok` | Parsed and reconciled |
+| `● run` / `● up` | Parsing / uploading |
+| `● chk` | Parsed, but the lines don't add up (`needs_review`) |
+| `● dup` / `● same` | Another document holds this statement / these exact bytes were uploaded before |
+| `● err` / `● skip` | Parsing failed / no parser handles this kind of file |
+
+Square brackets mean one thing: a key you can press (`[a] 全部帳單`), the key in amber and its label in plain text. Statuses, toggles, and filters don't use them; a selected filter shows by its amber outline.
 
 Single-key shortcuts drive every page (`o` `s` `t` `u` to switch pages, `/` to search, `j` `k` `Enter` in lists, `?` for help, `⌘K` for a command palette). Phones get a bottom tab bar and lists grouped by day instead of tables.
 
