@@ -14,6 +14,7 @@ A self-hosted personal finance platform. It turns bank and credit card statement
 |---|---|---|
 | [`apps/backend`](apps/backend/) | Go. The only public service: API, document ingestion, background jobs, and the web app (embedded). Owns the database. | ✅ Upload, parse, and read statements |
 | [`apps/parser`](apps/parser/) | Python. Stateless parser behind gRPC: a raw statement goes in, structured data comes out. Internal only. | ✅ 4 banks |
+| [`apps/mailbox`](apps/mailbox/) | Cloudflare Email Worker. Takes statements Gmail forwards to an address on Email Routing and uploads them to the backend. Deployed by hand | ✅ Automatic ingestion |
 | [`apps/web`](apps/web/) | SvelteKit single-page app. Built into the backend binary today; an app of its own, so it could also be served on its own (say, by a proxy in front of the backend) | ✅ Overview, statements, transactions, upload |
 
 **Shared**
@@ -22,7 +23,7 @@ A self-hosted personal finance platform. It turns bank and credit card statement
 |---|---|---|
 | [`proto/`](proto/) | gRPC contracts, managed with buf. Generated code is committed inside each app. | ✅ |
 
-Design decisions and their reasons are in [`docs/adr/`](docs/adr/): 0001 rewrite as V2, 0002 architecture, 0003 tech stack, 0004 money and dates, 0005 ingestion pipeline, 0006 test data, 0007 web app, 0008 authentication, 0009 transaction parents.
+Design decisions and their reasons are in [`docs/adr/`](docs/adr/): 0001 rewrite as V2, 0002 architecture, 0003 tech stack, 0004 money and dates, 0005 ingestion pipeline, 0006 test data, 0007 web app, 0008 authentication, 0009 transaction parents, 0010 mail ingestion, 0011 telemetry.
 
 ## Why V2
 
@@ -50,7 +51,7 @@ browser ── Cloudflare Access ── Tunnel ──▶ backend (Go) ── gRP
 | Cathay United Bank | Password-protected PDF | |
 | HSBC Taiwan | Password-protected PDF | Transaction descriptions are images, read with OCR |
 
-Upload the e-mail (`.eml`) or the PDF itself.
+Upload the e-mail (`.eml`) or the PDF itself, or let Gmail forward statement e-mails to the mailbox, which uploads them as they arrive ([ADR 0010](docs/adr/0010-mail-ingestion.md)).
 
 ## Getting started
 

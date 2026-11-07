@@ -11,6 +11,7 @@ Self-hosted personal finance platform. V2 is being built on `main` (ADR 0001): a
 | `apps/backend/` | Go. API, document ingestion, River jobs, Postgres schema |
 | `apps/parser/` | Python. gRPC server that turns statements into structured data |
 | `apps/web/` | SvelteKit single-page app; its build is embedded in the backend |
+| `apps/mailbox/` | Cloudflare Email Worker: uploads statements Gmail forwards; deployed by hand (`task mailbox:deploy`) |
 | `proto/` | gRPC contracts (buf). Edit here, then regenerate |
 | `docs/adr/` | Design decisions |
 
@@ -73,7 +74,7 @@ docker compose up -d    # local Postgres for `task backend:run`
 ## Commits
 
 - Agents do not commit or push unless asked; the owner reviews and commits.
-- Conventional Commits in English: `type(scope): summary`. Scopes: `backend`, `parser`, `proto`, `web`, `docs`; omit for changes across components.
+- Conventional Commits in English: `type(scope): summary`. Scopes: `backend`, `parser`, `mailbox`, `proto`, `web`, `docs`; omit for changes across components.
 
 ## Secrets and local state
 

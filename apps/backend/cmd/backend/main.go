@@ -16,6 +16,10 @@ import (
 	"github.com/labstack/echo/v5/middleware"
 	"github.com/riverqueue/river"
 	"github.com/riverqueue/river/riverdriver/riverpgxv5"
+	"github.com/riverqueue/river/rivertype"
+	"github.com/riverqueue/rivercontrib/otelriver"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+	"go.opentelemetry.io/otel"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
@@ -25,8 +29,12 @@ import (
 	"github.com/hsin19/finchie/apps/backend/internal/db"
 	parserv1 "github.com/hsin19/finchie/apps/backend/internal/gen/finchie/parser/v1"
 	"github.com/hsin19/finchie/apps/backend/internal/ingest"
+	"github.com/hsin19/finchie/apps/backend/internal/telemetry"
 	"github.com/hsin19/finchie/apps/backend/internal/web"
 )
+
+// version is the release, set at build time (-ldflags "-X main.version=2.4.0"); telemetry carries it.
+var version = "dev"
 
 func main() {
 	if len(os.Args) > 1 && os.Args[1] == "healthcheck" {
@@ -51,8 +59,21 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	logger := newLogger(cfg.LogFormat)
+	logger, shutdownTelemetry, err := telemetry.Setup(context.Background(), version, newStdoutHandler(cfg.LogFormat))
+	if err != nil {
+		return err
+	}
 	slog.SetDefault(logger)
+	defer func() {
+		flushCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := shutdownTelemetry(flushCtx); err != nil {
+			slog.Warn("flushing telemetry", "error", err)
+		}
+	}()
+	if telemetry.Enabled() {
+		slog.Info("sending traces, metrics, and logs over OTLP", "endpoint", os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"), "version", version)
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -70,10 +91,14 @@ func run() error {
 		return err
 	}
 	slog.Info("linked transactions to their parents", "children", linked)
+	if err := telemetry.ObserveDocuments(pool, otel.Meter(telemetry.Scope)); err != nil {
+		return err
+	}
 
 	// The parser is internal and stateless (ADR 0002): plaintext on the private network.
 	limit := grpc.WithDefaultCallOptions(grpc.MaxCallSendMsgSize(int(cfg.MaxUploadBytes()) + 1<<20))
-	conn, err := grpc.NewClient(cfg.ParserAddr, grpc.WithTransportCredentials(insecure.NewCredentials()), limit)
+	conn, err := grpc.NewClient(cfg.ParserAddr, grpc.WithTransportCredentials(insecure.NewCredentials()), limit,
+		grpc.WithStatsHandler(otelgrpc.NewClientHandler()))
 	if err != nil {
 		return fmt.Errorf("parser client: %w", err)
 	}
@@ -89,6 +114,11 @@ func run() error {
 		Queues:  map[string]river.QueueConfig{river.QueueDefault: {MaxWorkers: cfg.ParseConcurrency}},
 		Workers: workers,
 		Logger:  logger,
+		// The parse job's span links back to the upload that enqueued it, and is named after the job.
+		Middleware: []rivertype.Middleware{otelriver.NewMiddleware(&otelriver.MiddlewareConfig{
+			EnableTracePropagation:      true,
+			EnableWorkSpanJobKindSuffix: true,
+		})},
 	})
 	if err != nil {
 		return fmt.Errorf("job client: %w", err)
@@ -99,15 +129,15 @@ func run() error {
 
 	e := echo.New()
 	e.Logger = logger
-	e.Use(middleware.Recover(), middleware.RequestLogger(), middleware.BodyLimit(cfg.MaxUploadBytes()+1<<20))
+	e.Use(telemetry.Route(), middleware.Recover(), middleware.RequestLogger(), middleware.BodyLimit(cfg.MaxUploadBytes()+1<<20))
 	if cfg.AccessEnabled() {
-		e.Use(access.New(ctx, cfg.AccessTeamDomain, cfg.AccessAudience).Middleware("/healthz"))
+		e.Use(access.New(ctx, cfg.AccessTeamDomain, cfg.AccessAudience).Middleware(telemetry.HealthPath))
 		slog.Info("requests must come through Cloudflare Access", "team", cfg.AccessTeamDomain)
 	} else {
 		slog.Warn("Cloudflare Access verification is off: anyone who reaches the backend can use it " +
 			"(set BACKEND_ACCESS_TEAM_DOMAIN and BACKEND_ACCESS_AUD in production)")
 	}
-	e.GET("/healthz", func(c *echo.Context) error {
+	e.GET(telemetry.HealthPath, func(c *echo.Context) error {
 		if err := pool.Ping(c.Request().Context()); err != nil {
 			return c.String(http.StatusServiceUnavailable, "database unreachable")
 		}
@@ -117,7 +147,7 @@ func run() error {
 	web.Register(e)
 
 	slog.Info("listening", "addr", cfg.HTTPAddr, "parser", cfg.ParserAddr)
-	serveErr := echo.StartConfig{Address: cfg.HTTPAddr, HideBanner: true, GracefulTimeout: 10 * time.Second}.Start(ctx, e)
+	serveErr := echo.StartConfig{Address: cfg.HTTPAddr, HideBanner: true, GracefulTimeout: 10 * time.Second}.Start(ctx, telemetry.Handler(e))
 
 	stopCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -130,9 +160,9 @@ func run() error {
 	return nil
 }
 
-func newLogger(format string) *slog.Logger {
+func newStdoutHandler(format string) slog.Handler {
 	if format == "text" {
-		return slog.New(slog.NewTextHandler(os.Stdout, nil))
+		return slog.NewTextHandler(os.Stdout, nil)
 	}
-	return slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	return slog.NewJSONHandler(os.Stdout, nil)
 }

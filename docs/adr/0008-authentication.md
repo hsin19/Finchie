@@ -12,10 +12,12 @@ Finchie has one user. Signing in is Cloudflare Access's job, at the edge; the ba
 
 The backend check is configured with `BACKEND_ACCESS_TEAM_DOMAIN` and `BACKEND_ACCESS_AUD`. Both empty turns it off for local development (the backend logs a warning); setting only one is a startup error, since it would look like protection while checking nothing.
 
+A machine can come through Access too, with a service token: its JWT carries no e-mail address, and the backend lets it upload documents and nothing else (the mailbox Worker, ADR 0010).
+
 Without the backend check, one mistake in the Cloudflare configuration (a route added without its Access application) would publish the ledger, and nothing would say so.
 
 ## Alternatives considered
 
-- **Access with its e-mailed one-time code.** What the homelab already used for teams-gateway's admin page. Too slow for a page opened every day.
+- **Access with its e-mailed one-time code.** Built in, no OAuth client to set up. Too slow for a page opened every day.
 - **OAuth in the backend (Google, then GitHub).** Works without Cloudflare and is good practice, but makes the backend public, its login the only barrier, and adds sessions, cookies, and CSRF handling to maintain. Access gives the same one-click Google sign-in at the edge.
 - **Access alone, no backend check.** One layer: the Cloudflare configuration would be the only thing standing between the internet and the data.

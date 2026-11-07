@@ -24,7 +24,7 @@ Finchie is a side project. Trying interesting technology and practising it is an
 
 ## Alternatives considered
 
-- **.NET for the backend.** The homelab already runs a .NET service with OpenTelemetry, Cloudflare Access auth, and EF Core that could be copied. Rejected because practising something new is the point.
+- **.NET for the backend.** Well known to the owner, with code to borrow from earlier projects. Rejected because practising something new is the point.
 - **Go only, parsing through command-line tools.** Go's PDF libraries are weak (`ledongthuc/pdf`), paid (`unipdf`), or AGPL through cgo (`go-fitz`). Shelling out to `pdftotext` was possible but unverified on these statements, while pdfplumber already parses all four banks.
 - **Python only.** Fewer languages, but no Go practice.
 - **Tesseract for OCR.** Needs system packages on every machine; RapidOCR installs with pip.

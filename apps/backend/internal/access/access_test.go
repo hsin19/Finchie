@@ -115,3 +115,43 @@ func TestOnlyRequestsWithAValidAccessTokenGetThrough(t *testing.T) {
 		})
 	}
 }
+
+// A service token's JWT has no e-mail address: the mailbox Worker may upload and nothing else.
+func TestServiceTokensMayOnlyUpload(t *testing.T) {
+	tm := newTeam(t)
+	e := echo.New()
+	e.Use(New(t.Context(), tm.server.URL, audience).Middleware("/healthz"))
+	ok := func(c *echo.Context) error { return c.String(http.StatusOK, "ok") }
+	e.GET("/api/statements", ok)
+	e.GET("/api/documents", ok)
+	e.POST("/api/documents", ok)
+	e.POST("/api/documents/:id/reparse", ok)
+
+	machine := tm.sign(t, tm.key, tm.claims(func(c map[string]any) {
+		delete(c, "email")
+		c["common_name"] = "client-id.access"
+	}))
+	person := tm.sign(t, tm.key, tm.claims(nil))
+	cases := []struct {
+		name, method, path, token string
+		status                    int
+	}{
+		{"service token uploads", http.MethodPost, "/api/documents", machine, http.StatusOK},
+		{"service token lists documents", http.MethodGet, "/api/documents", machine, http.StatusForbidden},
+		{"service token reads statements", http.MethodGet, "/api/statements", machine, http.StatusForbidden},
+		{"service token re-parses", http.MethodPost, "/api/documents/1/reparse", machine, http.StatusForbidden},
+		{"person reads statements", http.MethodGet, "/api/statements", person, http.StatusOK},
+		{"person uploads", http.MethodPost, "/api/documents", person, http.StatusOK},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			request := httptest.NewRequestWithContext(t.Context(), tc.method, tc.path, nil)
+			request.Header.Set(Header, tc.token)
+			recorder := httptest.NewRecorder()
+			e.ServeHTTP(recorder, request)
+			if recorder.Code != tc.status {
+				t.Fatalf("status = %d, want %d (%s)", recorder.Code, tc.status, recorder.Body)
+			}
+		})
+	}
+}

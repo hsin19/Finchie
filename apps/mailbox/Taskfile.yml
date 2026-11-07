@@ -1,0 +1,40 @@
+version: '3'
+
+tasks:
+  install:
+    desc: Install dependencies (the pnpm version is pinned in package.json)
+    cmds:
+      - pnpm install --frozen-lockfile
+
+  fmt:
+    desc: Fix formatting
+    cmds:
+      - pnpm run format
+
+  lint:
+    desc: dprint and the TypeScript compiler
+    cmds:
+      - pnpm run format:check
+      - pnpm run typecheck
+
+  test:
+    desc: Unit tests
+    cmds:
+      - pnpm test
+
+  build:
+    desc: Bundle the Worker the way a deploy would, without uploading it
+    cmds:
+      - pnpm exec wrangler deploy --dry-run --outdir .wrangler/dry-run
+
+  check:
+    desc: Everything CI runs for the mailbox
+    cmds:
+      - task: lint
+      - task: test
+      - task: build
+
+  deploy:
+    desc: Deploy the Worker to Cloudflare by hand (`pnpm exec wrangler login` once first); its settings are secrets set where it is deployed
+    cmds:
+      - pnpm exec wrangler deploy

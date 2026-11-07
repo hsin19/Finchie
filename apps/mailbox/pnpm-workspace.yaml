@@ -1,0 +1,6 @@
+engineStrict: true
+allowBuilds:
+  dprint: false
+  esbuild: true
+  sharp: false
+  workerd: true

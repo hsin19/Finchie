@@ -1,0 +1,16 @@
+// The mailbox Worker (ADR 0010). Deployed by hand: `task mailbox:deploy`. Its settings are all secrets
+// (`wrangler secret put`, put in by whoever deploys it), so nothing personal is in this file:
+//   FINCHIE_URL           where the backend is, e.g. https://finchie.example.com
+//   OWNER_EMAIL           the Gmail address that forwards statements here
+//   ACCESS_CLIENT_ID      the Access service token the Worker uploads with
+//   ACCESS_CLIENT_SECRET
+// The route (an address on Email Routing that runs this Worker) belongs to the deployment's Cloudflare
+// configuration, not to this file.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "finchie-mailbox",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-01",
+  "workers_dev": false,
+  "observability": { "enabled": true }
+}

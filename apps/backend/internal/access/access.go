@@ -3,6 +3,9 @@
 // Access signs a JWT for every request it lets through and passes it in a header. Checking it here
 // means a mistake in the Cloudflare setup (a route without an Access application, say) does not
 // expose the ledger: the request still arrives without a valid token and is refused.
+//
+// A token without an e-mail address belongs to a machine, an Access service token (the mailbox
+// Worker, ADR 0010), not to a person signed in: it may upload a document and do nothing else.
 package access
 
 import (
@@ -18,6 +21,9 @@ import (
 
 // Header carries the token Access signs for each request it lets through.
 const Header = "Cf-Access-Jwt-Assertion"
+
+// UploadPath is the one route a service token may call, with POST.
+const UploadPath = "/api/documents"
 
 type Verifier struct {
 	verifier *oidc.IDTokenVerifier
@@ -50,9 +56,18 @@ func (v *Verifier) Middleware(skip ...string) echo.MiddlewareFunc {
 			if token == "" {
 				return c.JSON(http.StatusUnauthorized, problem{Message: "sign in through Cloudflare Access"})
 			}
-			if _, err := v.verifier.Verify(request.Context(), token); err != nil {
+			verified, err := v.verifier.Verify(request.Context(), token)
+			if err != nil {
 				slog.WarnContext(request.Context(), "rejected Cloudflare Access token", "error", err)
 				return c.JSON(http.StatusUnauthorized, problem{Message: "invalid Cloudflare Access token"})
+			}
+			var claims struct {
+				Email string `json:"email"`
+			}
+			if err := verified.Claims(&claims); err != nil || claims.Email == "" {
+				if request.Method != http.MethodPost || request.URL.Path != UploadPath {
+					return c.JSON(http.StatusForbidden, problem{Message: "a service token may only upload documents"})
+				}
 			}
 			return next(c)
 		}

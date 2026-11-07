@@ -83,6 +83,7 @@ jobs:
           --tag "$IMAGE:smoke"
           --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY"
           --label "org.opencontainers.image.version=$VERSION"
+          --build-arg "VERSION=$VERSION"
           --label "org.opencontainers.image.revision=$GITHUB_SHA"
         env:
           APP: ${{ matrix.app.name }}

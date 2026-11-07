@@ -11,6 +11,40 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const documentCounts = `-- name: DocumentCounts :many
+SELECT (CASE WHEN status = 'failed' AND error LIKE 'Unimplemented%' THEN 'skipped' ELSE status END)::text AS status,
+       count(*)::integer AS documents
+FROM documents
+GROUP BY 1
+`
+
+type DocumentCountsRow struct {
+	Status    string
+	Documents int32
+}
+
+// Documents by status as the web app shows it: a failure because no parser handles the file is
+// "skipped", since there is nothing to fix or retry.
+func (q *Queries) DocumentCounts(ctx context.Context) ([]DocumentCountsRow, error) {
+	rows, err := q.db.Query(ctx, documentCounts)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []DocumentCountsRow
+	for rows.Next() {
+		var i DocumentCountsRow
+		if err := rows.Scan(&i.Status, &i.Documents); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const finishDocument = `-- name: FinishDocument :exec
 UPDATE documents
 SET status         = $1,

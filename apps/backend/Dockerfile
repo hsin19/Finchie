@@ -19,8 +19,10 @@ COPY apps/backend/go.mod apps/backend/go.sum ./
 RUN --mount=type=cache,target=/go/pkg/mod go mod download
 COPY apps/backend/ ./
 COPY --from=web /src/build ./internal/web/dist
+# The release, reported with every trace, metric, and log (release.yml passes the tag's version)
+ARG VERSION=dev
 RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
-    CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/backend ./cmd/backend
+    CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X main.version=${VERSION}" -o /out/backend ./cmd/backend
 
 
 FROM gcr.io/distroless/static-debian12

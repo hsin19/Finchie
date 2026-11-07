@@ -56,6 +56,21 @@ updates:
           - "patch"
 
   - package-ecosystem: "npm"
+    directory: "/apps/mailbox"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    groups:
+      # Deployed by hand (ADR 0010): a merged bump reaches Cloudflare at the next `task mailbox:deploy`.
+      mailbox:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "npm"
     directory: "/apps/web"
     schedule:
       interval: "weekly"

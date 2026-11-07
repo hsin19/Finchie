@@ -37,3 +37,11 @@ SET status         = @status,
     warnings       = @warnings,
     parsed_at      = now()
 WHERE id = @id;
+
+-- name: DocumentCounts :many
+-- Documents by status as the web app shows it: a failure because no parser handles the file is
+-- "skipped", since there is nothing to fix or retry.
+SELECT (CASE WHEN status = 'failed' AND error LIKE 'Unimplemented%' THEN 'skipped' ELSE status END)::text AS status,
+       count(*)::integer AS documents
+FROM documents
+GROUP BY 1;
