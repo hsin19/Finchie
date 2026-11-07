@@ -4,7 +4,7 @@ gRPC contracts, managed with [buf](https://buf.build/) (`buf.yaml` and `buf.gen.
 
 | Package | Server | Client |
 |---|---|---|
-| `finchie.parser.v1` | `services/parser` | `services/backend` |
+| `finchie.parser.v1` | `apps/parser` | `apps/backend` |
 
 ## Workflow
 
@@ -13,7 +13,7 @@ task proto          # format, lint, regenerate Go and Python code
 task proto:check    # format, lint, and breaking-change check against main
 ```
 
-Generated code is committed: Go in `services/backend/internal/gen/`, Python in `services/parser/src/finchie/`. Plugin versions in `buf.gen.yaml` must not be newer than the runtime libraries the services pin (`go.mod`, `pyproject.toml`); the generated code checks this when it loads.
+Generated code is committed: Go in `apps/backend/internal/gen/`, Python in `apps/parser/src/finchie/`. Plugin versions in `buf.gen.yaml` must not be newer than the runtime libraries the services pin (`go.mod`, `pyproject.toml`); the generated code checks this when it loads.
 
 ## Conventions
 

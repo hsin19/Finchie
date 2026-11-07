@@ -22,7 +22,7 @@ services:
 
   parser:
     profiles: [app]
-    build: services/parser
+    build: apps/parser
     init: true
     env_file:
       - path: .local/parser.env
@@ -31,9 +31,9 @@ services:
   backend:
     profiles: [app]
     build:
-      # The backend embeds web/, so it builds from the repository root.
+      # The backend embeds apps/web, so it builds from the repository root.
       context: .
-      dockerfile: services/backend/Dockerfile
+      dockerfile: apps/backend/Dockerfile
     init: true
     environment:
       BACKEND_DATABASE_URL: postgres://finchie:finchie@postgres:5432/finchie?sslmode=disable

@@ -1,0 +1,11 @@
+# The build context is the repository root; send only what the image is built from.
+*
+!apps/backend
+!apps/web
+
+apps/backend/bin
+apps/backend/internal/web/dist
+**/*.test
+apps/web/node_modules
+apps/web/.svelte-kit
+apps/web/build

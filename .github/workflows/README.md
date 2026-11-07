@@ -26,7 +26,7 @@ Within a job, each check is its own step gated on `!cancelled()`, so one run sho
 
 Push a tag: `git tag v2.0.0 && git push origin v2.0.0`. Images are `ghcr.io/<owner>/finchie-backend` and `ghcr.io/<owner>/finchie-parser`, tagged `2.0.0`, `2.0` (not for pre-releases such as `v2.0.0-rc.1`), and `sha-<short sha>`.
 
-- Each image is built from its service's `Dockerfile` on a native runner per architecture (`ubuntu-24.04`, `ubuntu-24.04-arm`). The backend's build context is the repository root, because it builds and embeds `web/`.
+- Each image is built from its app's `Dockerfile` on a native runner per architecture (`ubuntu-24.04`, `ubuntu-24.04-arm`). The backend's build context is the repository root, because it builds and embeds `apps/web/`.
 - [`../scripts/smoke.sh`](../scripts/smoke.sh) then starts it the way production does, without secrets: the parser has to report gRPC health `SERVING`; the backend gets a throwaway Postgres 18, runs its migrations, has to answer `/healthz`, and has to serve the embedded web app. Run it locally the same way: `.github/scripts/smoke.sh backend finchie-backend:dev`.
 - The image that passed is pushed as `<version>-<arch>` (e.g. `2.0.0-linux-arm64`); what is pushed is what ran.
 - Only when all four builds pass does `publish` merge the two architectures into one index with `docker buildx imagetools create` and point every release tag at it. A failed release can leave `<version>-<arch>` tags behind, but never a release tag; deployments use release tags only.
@@ -47,7 +47,7 @@ Groups whose names end in `-manual` are left for a human (see [`../dependabot.ym
 
 | Group | Why it can't merge itself |
 |---|---|
-| `codegen-manual` (openapi-typescript) | Its output `web/src/lib/api/schema.d.ts` is committed, so the web job's API-types check fails until `task web:generate` is run and committed |
+| `codegen-manual` (openapi-typescript) | Its output `apps/web/src/lib/api/schema.d.ts` is committed, so the web job's API-types check fails until `task web:generate` is run and committed |
 | `images-manual` (Dockerfile base images), `compose-manual` | `check.yml` builds no images; the first real test of a new base image is a release |
 
 Tool versions pinned in Taskfiles (`buf`, `golangci-lint`, `sqlc`, `oapi-codegen`) and the buf plugin versions in `buf.gen.yaml` are not tracked by Dependabot; bump them by hand. Keep buf plugin versions at or below the runtime libraries each service pins.

@@ -5,14 +5,14 @@ vars:
 
 includes:
   backend:
-    taskfile: services/backend/Taskfile.yml
-    dir: services/backend
+    taskfile: apps/backend/Taskfile.yml
+    dir: apps/backend
   parser:
-    taskfile: services/parser/Taskfile.yml
-    dir: services/parser
+    taskfile: apps/parser/Taskfile.yml
+    dir: apps/parser
   web:
-    taskfile: web/Taskfile.yml
-    dir: web
+    taskfile: apps/web/Taskfile.yml
+    dir: apps/web
 
 tasks:
   proto:

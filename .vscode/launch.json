@@ -8,16 +8,16 @@
             "module": "finchie_parser",
             "justMyCode": true,
             "console": "integratedTerminal",
-            "cwd": "${workspaceFolder}/services/parser",
-            "python": "${workspaceFolder}/services/parser/.venv/bin/python"
+            "cwd": "${workspaceFolder}/apps/parser",
+            "python": "${workspaceFolder}/apps/parser/.venv/bin/python"
         },
         {
             "name": "backend: HTTP server",
             "type": "go",
             "request": "launch",
             "mode": "auto",
-            "program": "${workspaceFolder}/services/backend/cmd/backend",
-            "cwd": "${workspaceFolder}/services/backend",
+            "program": "${workspaceFolder}/apps/backend/cmd/backend",
+            "cwd": "${workspaceFolder}/apps/backend",
             "envFile": "${workspaceFolder}/.local/backend.env"
         }
     ]

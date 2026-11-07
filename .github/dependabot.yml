@@ -2,7 +2,7 @@ version: 2
 updates:
   - package-ecosystem: "uv"
     directories:
-      - "/services/*"
+      - "/apps/*"
     schedule:
       interval: "weekly"
     cooldown:
@@ -30,7 +30,7 @@ updates:
 
   - package-ecosystem: "gomod"
     directories:
-      - "/services/*"
+      - "/apps/*"
     schedule:
       interval: "weekly"
     cooldown:
@@ -56,7 +56,7 @@ updates:
           - "patch"
 
   - package-ecosystem: "npm"
-    directory: "/web"
+    directory: "/apps/web"
     schedule:
       interval: "weekly"
     cooldown:
@@ -65,11 +65,11 @@ updates:
       prefix: "chore"
       include: "scope"
     ignore:
-      # @types/node follows the Node major in web/.node-version (an LTS line).
+      # @types/node follows the Node major in apps/web/.node-version (an LTS line).
       - dependency-name: "@types/node"
         update-types: ["version-update:semver-major"]
     groups:
-      # Its output is committed (web/src/lib/api/schema.d.ts), so a bump can need `task web:generate`.
+      # Its output is committed (apps/web/src/lib/api/schema.d.ts), so a bump can need `task web:generate`.
       codegen-manual:
         patterns:
           - "openapi-typescript"
@@ -104,7 +104,7 @@ updates:
   # is the first to build and smoke-check it. Left for a human.
   - package-ecosystem: "docker"
     directories:
-      - "/services/*"
+      - "/apps/*"
     schedule:
       interval: "weekly"
     cooldown:

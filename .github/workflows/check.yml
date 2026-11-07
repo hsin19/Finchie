@@ -31,8 +31,8 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v7
         with:
-          go-version-file: services/backend/go.mod
-          cache-dependency-path: services/backend/go.sum
+          go-version-file: apps/backend/go.mod
+          cache-dependency-path: apps/backend/go.sum
 
       - name: Setup Task
         uses: go-task/setup-task@v2
@@ -51,8 +51,8 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v7
         with:
-          go-version-file: services/backend/go.mod
-          cache-dependency-path: services/backend/go.sum
+          go-version-file: apps/backend/go.mod
+          cache-dependency-path: apps/backend/go.sum
 
       - name: Setup Task
         uses: go-task/setup-task@v2
@@ -81,7 +81,7 @@ jobs:
         uses: astral-sh/setup-uv@v10.3.3
         with:
           enable-cache: true
-          cache-dependency-glob: services/parser/uv.lock
+          cache-dependency-glob: apps/parser/uv.lock
 
       - name: Setup Task
         uses: go-task/setup-task@v2
@@ -110,8 +110,8 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v7
         with:
-          go-version-file: services/backend/go.mod
-          cache-dependency-path: services/backend/go.sum
+          go-version-file: apps/backend/go.mod
+          cache-dependency-path: apps/backend/go.sum
 
       - name: Setup Task
         uses: go-task/setup-task@v2
@@ -137,24 +137,24 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      # The pnpm version comes from packageManager in web/package.json.
+      # The pnpm version comes from packageManager in apps/web/package.json.
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
         with:
-          package_json_file: web/package.json
+          package_json_file: apps/web/package.json
 
       - name: Setup Node
         uses: actions/setup-node@v7
         with:
-          node-version-file: web/.node-version
+          node-version-file: apps/web/.node-version
           cache: pnpm
-          cache-dependency-path: web/pnpm-lock.yaml
+          cache-dependency-path: apps/web/pnpm-lock.yaml
 
       - name: Cache dprint plugins
         uses: actions/cache@v6
         with:
           path: ~/.cache/dprint
-          key: dprint-${{ runner.os }}-${{ hashFiles('web/dprint.jsonc') }}
+          key: dprint-${{ runner.os }}-${{ hashFiles('apps/web/dprint.jsonc') }}
 
       - name: Setup Task
         uses: go-task/setup-task@v2
@@ -168,8 +168,8 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: |
           task web:generate
-          if ! git diff --exit-code -- web/src/lib/api/schema.d.ts; then
-            echo "::error::web/src/lib/api/schema.d.ts is stale: run 'task web:generate' and commit the result"
+          if ! git diff --exit-code -- apps/web/src/lib/api/schema.d.ts; then
+            echo "::error::apps/web/src/lib/api/schema.d.ts is stale: run 'task web:generate' and commit the result"
             exit 1
           fi
 

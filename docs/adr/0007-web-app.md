@@ -2,18 +2,18 @@
 
 ## Decision
 
-The web app is a SvelteKit single-page app in `web/`, embedded in the backend binary and served from the same origin as the API.
+The web app is a SvelteKit single-page app in `apps/web/`, embedded in the backend binary and served from the same origin as the API.
 
 | Area | Choice | Why |
 |---|---|---|
 | Framework | SvelteKit 3 (Svelte 5 runes) | The owner already writes Svelte 5 (show-me-way uses plain Svelte and Vite); SvelteKit's router and load functions are the new part to practise |
 | Rendering | Single-page app: `adapter-static` with a `200.html` fallback, `ssr = false` | One user behind Cloudflare Access gains nothing from server rendering, and it would add a Node process to deploy |
-| Serving | The backend embeds `web/build` with `go:embed` and answers every non-API GET with `200.html` | One image, one origin: no CORS, one Access application, the UI and API always ship the same version |
-| API client | `openapi-typescript` types from `services/backend/api/openapi.yaml`, called through `openapi-fetch` | The same contract-first path as the Go handlers; the generated file is committed and CI fails when it drifts |
+| Serving | The backend embeds `apps/web/build` with `go:embed` and answers every non-API GET with `200.html` | One image, one origin: no CORS, one Access application, the UI and API always ship the same version |
+| API client | `openapi-typescript` types from `apps/backend/api/openapi.yaml`, called through `openapi-fetch` | The same contract-first path as the Go handlers; the generated file is committed and CI fails when it drifts |
 | Data loading | Universal `load` functions; every filter lives in the URL | A filtered view can be bookmarked, and Back undoes a filter |
 | Live status | The layout polls while any document is `pending` | Parsing takes seconds; polling is simpler than a push channel |
-| Money | Decimal strings added as scaled `BigInt`s (`web/src/lib/money.ts`) | ADR 0004 holds in the browser too; floating point only sizes bars |
-| Styling | Tailwind v4; design tokens in `@theme` in `web/src/routes/layout.css` | |
+| Money | Decimal strings added as scaled `BigInt`s (`apps/web/src/lib/money.ts`) | ADR 0004 holds in the browser too; floating point only sizes bars |
+| Styling | Tailwind v4; design tokens in `@theme` in `apps/web/src/routes/layout.css` | |
 | Fonts | JetBrains Mono and Noto Sans TC, self-hosted through Fontsource | No requests to third-party font hosts; Noto's unicode-range subsets load only the characters a page uses |
 | Tooling | pnpm, Vite, Vitest, ESLint with `eslint-plugin-svelte`, svelte-check, dprint | The same set as show-me-way |
 

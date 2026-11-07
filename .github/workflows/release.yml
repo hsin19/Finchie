@@ -59,13 +59,13 @@ jobs:
     strategy:
       matrix:
         app:
-          # The backend embeds web/, so its context is the repository root.
+          # The backend embeds apps/web/, so its context is the repository root.
           - name: backend
             image: finchie-backend
             context: .
           - name: parser
             image: finchie-parser
-            context: services/parser
+            context: apps/parser
         platform:
           - arch: linux-amd64
             runner: ubuntu-24.04
@@ -79,7 +79,7 @@ jobs:
       - name: Build image
         run: >
           docker build "$CONTEXT"
-          --file "services/$APP/Dockerfile"
+          --file "apps/$APP/Dockerfile"
           --tag "$IMAGE:smoke"
           --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY"
           --label "org.opencontainers.image.version=$VERSION"

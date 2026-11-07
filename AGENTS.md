@@ -8,9 +8,9 @@ Self-hosted personal finance platform. V2 is being built on `main` (ADR 0001): a
 
 | Path | Contents |
 |---|---|
-| `services/backend/` | Go. API, document ingestion, River jobs, Postgres schema |
-| `services/parser/` | Python. gRPC server that turns statements into structured data |
-| `web/` | SvelteKit single-page app; its build is embedded in the backend |
+| `apps/backend/` | Go. API, document ingestion, River jobs, Postgres schema |
+| `apps/parser/` | Python. gRPC server that turns statements into structured data |
+| `apps/web/` | SvelteKit single-page app; its build is embedded in the backend |
 | `proto/` | gRPC contracts (buf). Edit here, then regenerate |
 | `docs/adr/` | Design decisions |
 
@@ -30,7 +30,7 @@ task backend:lint
 task web:generate       # regenerate the web app's API types after editing openapi.yaml (commit them)
 task web:check          # dprint, ESLint, svelte-check, Vitest, build
 task web:dev            # Vite on :5173, /api proxied to the backend on :8080
-task backend:web        # build web/ into the backend, so `task backend:run` serves the UI
+task backend:web        # build apps/web/ into the backend, so `task backend:run` serves the UI
 task check              # everything CI runs (except the generated-code check, which needs a clean tree)
 docker compose up -d    # local Postgres for `task backend:run`
 .github/scripts/smoke.sh backend <image>   # the release smoke check, against a local image
@@ -42,10 +42,10 @@ docker compose up -d    # local Postgres for `task backend:run`
 
   | Generated | From | Command |
   |---|---|---|
-  | `services/backend/internal/gen/`, `services/parser/src/finchie/` | `proto/` | `task proto` |
-  | `services/backend/internal/db/dbq/` | `internal/db/queries/*.sql`, migrations | `task backend:generate` |
-  | `services/backend/internal/api/openapi.gen.go` | `services/backend/api/openapi.yaml` | `task backend:generate` |
-  | `web/src/lib/api/schema.d.ts` | `services/backend/api/openapi.yaml` | `task web:generate` |
+  | `apps/backend/internal/gen/`, `apps/parser/src/finchie/` | `proto/` | `task proto` |
+  | `apps/backend/internal/db/dbq/` | `internal/db/queries/*.sql`, migrations | `task backend:generate` |
+  | `apps/backend/internal/api/openapi.gen.go` | `apps/backend/api/openapi.yaml` | `task backend:generate` |
+  | `apps/web/src/lib/api/schema.d.ts` | `apps/backend/api/openapi.yaml` | `task web:generate` |
 
 - `buf breaking` guards the proto contract against incompatible changes once it exists on `main`.
 - Real-statement regression: put `.eml` / `.pdf` files in `.local/statements/`, PDF passwords in `.local/parser.env`, and run `task parser:test-real`. It asserts that every statement reconciles. These files never leave `.local/` (ADR 0006).
@@ -63,7 +63,7 @@ docker compose up -d    # local Postgres for `task backend:run`
 - Python: type hints everywhere, ruff for lint and format, pytest. Test names describe behavior (`test_taishin_splits_wrapped_merchant_lines`).
 - Go: `gofmt`, golangci-lint, errors wrapped with `%w`, `context.Context` first. SQL lives in `.sql` files for sqlc, not in Go strings.
 - Schema changes are new goose migrations; never edit an applied one.
-- Web (SvelteKit 3, Svelte 5 runes): see [`web/README.md`](web/README.md) for its pitfalls. Format with dprint (`task web:fmt`), not Prettier. Amounts go through `#lib/money.js`, never `Number` arithmetic. Every filter belongs in the URL.
+- Web (SvelteKit 3, Svelte 5 runes): see [`apps/web/README.md`](apps/web/README.md) for its pitfalls. Format with dprint (`task web:fmt`), not Prettier. Amounts go through `#lib/money.js`, never `Number` arithmetic. Every filter belongs in the URL.
 
 ## Documentation rules
 
