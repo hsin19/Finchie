@@ -1,0 +1,11 @@
+{
+    "recommendations": [
+        "golang.go",
+        "ms-python.python",
+        "ms-python.debugpy",
+        "charliermarsh.ruff",
+        "svelte.svelte-vscode",
+        "dbaeumer.vscode-eslint",
+        "bradlc.vscode-tailwindcss"
+    ]
+}
