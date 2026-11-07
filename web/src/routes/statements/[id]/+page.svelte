@@ -146,6 +146,11 @@ onKeys({
     <h1 class="m-0 text-[18px] font-bold">{bank.name} · {monthOf(s.closingDate)}</h1>
     <Tag {status} label />
     {#if reparsing}<span class="text-accent">re-parsing…</span>{/if}
+    <span class="ml-auto flex flex-wrap gap-x-4 text-[12px]">
+        <a href={resolve(`/statements?m=${monthOf(s.closingDate)}`)} class="text-dim hover:text-ink">← {monthOf(s.closingDate)} 的帳單</a>
+        <!-- The lines on this statement: one statement per bank closes in a month. -->
+        <a href={resolve(`/transactions?closing=${monthOf(s.closingDate)}&card=${s.institution}`)} class="text-dim hover:text-ink">這張帳單的交易 →</a>
+    </span>
 </div>
 
 <div class="grid gap-3 md:grid-cols-[1fr_1.3fr]">
@@ -277,7 +282,3 @@ onKeys({
         {/each}
     </div>
 </section>
-
-<p class="m-0 text-[12px] text-mute">
-    <a href={resolve("/statements")}>← 所有帳單</a> · <a href={resolve(`/transactions?m=${monthOf(s.closingDate)}&card=${s.institution}`)}>這個月 {bank.name} 的交易 →</a>
-</p>
