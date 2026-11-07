@@ -20,14 +20,16 @@ const _ = grpc.SupportPackageIsVersion9
 
 const (
 	ParserService_ParseDocument_FullMethodName = "/finchie.parser.v1.ParserService/ParseDocument"
+	ParserService_OpenDocument_FullMethodName  = "/finchie.parser.v1.ParserService/OpenDocument"
 )
 
 // ParserServiceClient is the client API for ParserService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 //
-// Turns a raw financial document into structured data. Stateless: the caller
-// owns storage, retries, and deduplication (ADR 0002, ADR 0005).
+// Turns a raw financial document into structured data, and opens one for a
+// person to read. Stateless: the caller owns storage, retries, and
+// deduplication (ADR 0002, ADR 0005).
 type ParserServiceClient interface {
 	// Status codes carry the retry decision:
 	//
@@ -39,6 +41,14 @@ type ParserServiceClient interface {
 	//
 	// An unbalanced statement is still OK; see Reconciliation.
 	ParseDocument(ctx context.Context, in *ParseDocumentRequest, opts ...grpc.CallOption) (*ParseDocumentResponse, error)
+	// Opens a document for a person to read: an e-mail's headers, body, and
+	// attachments, or a bare PDF as its one file. A PDF comes back decrypted
+	// when it opens without a password or with a configured one, so the reader
+	// never needs the password (ADR 0012).
+	//
+	//	UNIMPLEMENTED       neither an e-mail nor a PDF
+	//	INVALID_ARGUMENT    the file is unreadable
+	OpenDocument(ctx context.Context, in *OpenDocumentRequest, opts ...grpc.CallOption) (*OpenDocumentResponse, error)
 }
 
 type parserServiceClient struct {
@@ -59,12 +69,23 @@ func (c *parserServiceClient) ParseDocument(ctx context.Context, in *ParseDocume
 	return out, nil
 }
 
+func (c *parserServiceClient) OpenDocument(ctx context.Context, in *OpenDocumentRequest, opts ...grpc.CallOption) (*OpenDocumentResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(OpenDocumentResponse)
+	err := c.cc.Invoke(ctx, ParserService_OpenDocument_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ParserServiceServer is the server API for ParserService service.
 // All implementations must embed UnimplementedParserServiceServer
 // for forward compatibility.
 //
-// Turns a raw financial document into structured data. Stateless: the caller
-// owns storage, retries, and deduplication (ADR 0002, ADR 0005).
+// Turns a raw financial document into structured data, and opens one for a
+// person to read. Stateless: the caller owns storage, retries, and
+// deduplication (ADR 0002, ADR 0005).
 type ParserServiceServer interface {
 	// Status codes carry the retry decision:
 	//
@@ -76,6 +97,14 @@ type ParserServiceServer interface {
 	//
 	// An unbalanced statement is still OK; see Reconciliation.
 	ParseDocument(context.Context, *ParseDocumentRequest) (*ParseDocumentResponse, error)
+	// Opens a document for a person to read: an e-mail's headers, body, and
+	// attachments, or a bare PDF as its one file. A PDF comes back decrypted
+	// when it opens without a password or with a configured one, so the reader
+	// never needs the password (ADR 0012).
+	//
+	//	UNIMPLEMENTED       neither an e-mail nor a PDF
+	//	INVALID_ARGUMENT    the file is unreadable
+	OpenDocument(context.Context, *OpenDocumentRequest) (*OpenDocumentResponse, error)
 	mustEmbedUnimplementedParserServiceServer()
 }
 
@@ -88,6 +117,9 @@ type UnimplementedParserServiceServer struct{}
 
 func (UnimplementedParserServiceServer) ParseDocument(context.Context, *ParseDocumentRequest) (*ParseDocumentResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ParseDocument not implemented")
+}
+func (UnimplementedParserServiceServer) OpenDocument(context.Context, *OpenDocumentRequest) (*OpenDocumentResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method OpenDocument not implemented")
 }
 func (UnimplementedParserServiceServer) mustEmbedUnimplementedParserServiceServer() {}
 func (UnimplementedParserServiceServer) testEmbeddedByValue()                       {}
@@ -128,6 +160,24 @@ func _ParserService_ParseDocument_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ParserService_OpenDocument_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(OpenDocumentRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ParserServiceServer).OpenDocument(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ParserService_OpenDocument_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ParserServiceServer).OpenDocument(ctx, req.(*OpenDocumentRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ParserService_ServiceDesc is the grpc.ServiceDesc for ParserService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -138,6 +188,10 @@ var ParserService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ParseDocument",
 			Handler:    _ParserService_ParseDocument_Handler,
+		},
+		{
+			MethodName: "OpenDocument",
+			Handler:    _ParserService_OpenDocument_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

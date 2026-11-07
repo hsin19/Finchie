@@ -23,7 +23,7 @@ A self-hosted personal finance platform. It turns bank and credit card statement
 |---|---|---|
 | [`proto/`](proto/) | gRPC contracts, managed with buf. Generated code is committed inside each app. | ✅ |
 
-Design decisions and their reasons are in [`docs/adr/`](docs/adr/): 0001 rewrite as V2, 0002 architecture, 0003 tech stack, 0004 money and dates, 0005 ingestion pipeline, 0006 test data, 0007 web app, 0008 authentication, 0009 transaction parents, 0010 mail ingestion, 0011 telemetry.
+Design decisions and their reasons are in [`docs/adr/`](docs/adr/): 0001 rewrite as V2, 0002 architecture, 0003 tech stack, 0004 money and dates, 0005 ingestion pipeline, 0006 test data, 0007 web app, 0008 authentication, 0009 transaction parents, 0010 mail ingestion, 0011 telemetry, 0012 reading documents.
 
 ## Why V2
 
@@ -51,7 +51,7 @@ browser ── Cloudflare Access ── Tunnel ──▶ backend (Go) ── gRP
 | Cathay United Bank | Password-protected PDF | |
 | HSBC Taiwan | Password-protected PDF | Transaction descriptions are images, read with OCR |
 
-Upload the e-mail (`.eml`) or the PDF itself, or let Gmail forward statement e-mails to the mailbox, which uploads them as they arrive ([ADR 0010](docs/adr/0010-mail-ingestion.md)).
+Upload the e-mail (`.eml`) or the PDF itself, or let Gmail forward statement e-mails to the mailbox, which uploads them as they arrive ([ADR 0010](docs/adr/0010-mail-ingestion.md)). A statement opens in the browser as its PDF, decrypted, without the password ([ADR 0012](docs/adr/0012-reading-documents.md)).
 
 ## Getting started
 

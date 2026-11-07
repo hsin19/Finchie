@@ -95,8 +95,10 @@ func run() error {
 		return err
 	}
 
-	// The parser is internal and stateless (ADR 0002): plaintext on the private network.
-	limit := grpc.WithDefaultCallOptions(grpc.MaxCallSendMsgSize(int(cfg.MaxUploadBytes()) + 1<<20))
+	// The parser is internal and stateless (ADR 0002): plaintext on the private network. A request
+	// carries a whole document; an opened one comes back no larger (ADR 0012).
+	messageLimit := int(cfg.MaxUploadBytes()) + 1<<20
+	limit := grpc.WithDefaultCallOptions(grpc.MaxCallSendMsgSize(messageLimit), grpc.MaxCallRecvMsgSize(messageLimit))
 	conn, err := grpc.NewClient(cfg.ParserAddr, grpc.WithTransportCredentials(insecure.NewCredentials()), limit,
 		grpc.WithStatsHandler(otelgrpc.NewClientHandler()))
 	if err != nil {
@@ -109,7 +111,8 @@ func run() error {
 	}()
 
 	workers := river.NewWorkers()
-	river.AddWorker(workers, ingest.NewWorker(pool, parserv1.NewParserServiceClient(conn), cfg.ParseTimeout))
+	parser := parserv1.NewParserServiceClient(conn)
+	river.AddWorker(workers, ingest.NewWorker(pool, parser, cfg.ParseTimeout))
 	jobs, err := river.NewClient(riverpgxv5.New(pool), &river.Config{
 		Queues:  map[string]river.QueueConfig{river.QueueDefault: {MaxWorkers: cfg.ParseConcurrency}},
 		Workers: workers,
@@ -143,7 +146,7 @@ func run() error {
 		}
 		return c.String(http.StatusOK, "ok")
 	})
-	api.RegisterHandlers(e, api.NewStrictHandler(api.NewServer(pool, jobs, cfg.MaxUploadBytes()), nil))
+	api.RegisterHandlers(e, api.NewStrictHandler(api.NewServer(pool, jobs, parser, cfg.MaxUploadBytes()), nil))
 	web.Register(e)
 
 	slog.Info("listening", "addr", cfg.HTTPAddr, "parser", cfg.ParserAddr)

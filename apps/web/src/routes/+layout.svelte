@@ -38,7 +38,7 @@ const month = $derived(page.url.searchParams.get("m"));
 const query = $derived<"" | `?m=${string}`>(month ? `?m=${month}` : "");
 const nav = $derived([
     { key: "o", label: "總覽", href: resolve("/"), current: page.route.id === "/" },
-    { key: "s", label: "帳單", href: resolve(`/statements${query}`), current: page.route.id?.startsWith("/statements") ?? false },
+    { key: "s", label: "帳單", href: resolve(`/statements${query}`), current: /^\/(statements|documents)/.test(page.route.id ?? "") },
     { key: "t", label: "交易", href: resolve(`/transactions${query}`), current: page.route.id === "/transactions" },
     { key: "u", label: "上傳", href: resolve("/upload"), current: page.route.id === "/upload" },
 ]);

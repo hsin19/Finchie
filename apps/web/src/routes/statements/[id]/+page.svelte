@@ -1,13 +1,12 @@
 <script lang="ts">
 import {
     api,
-    documentContentUrl,
     LEDGER,
     type Transaction,
     type TransactionLink,
     unwrap,
 } from "#lib/api/client.js";
-import FileLink from "#lib/components/FileLink.svelte";
+import FileLink, { openUrl } from "#lib/components/FileLink.svelte";
 import Tag from "#lib/components/Tag.svelte";
 import {
     formatBytes,
@@ -137,7 +136,7 @@ $effect(() => {
 });
 
 onKeys({
-    f: () => window.open(documentContentUrl(doc.id), "_blank", "noreferrer"),
+    f: () => window.open(openUrl(doc), "_blank", "noreferrer"),
     r: () => void reparse(),
 });
 </script>
@@ -150,6 +149,9 @@ onKeys({
         <a href={resolve(`/statements?m=${monthOf(s.closingDate)}`)} class="text-dim hover:text-ink">← {monthOf(s.closingDate)} 的帳單</a>
         <!-- The lines on this statement: one statement per bank closes in a month. -->
         <a href={resolve(`/transactions?closing=${monthOf(s.closingDate)}&card=${s.institution}`)} class="text-dim hover:text-ink">這張帳單的交易 →</a>
+        {#if doc.contentType === "message/rfc822"}
+            <a href={resolve("/documents/[id]", { id: String(doc.id) })} class="text-dim hover:text-ink">原始信件 →</a>
+        {/if}
     </span>
 </div>
 
@@ -210,7 +212,7 @@ onKeys({
             </tbody>
         </table>
         <div class="flex flex-wrap gap-2">
-            <FileLink id={doc.id} class="control inline-flex items-center text-ink hover:text-ink"><span class="text-accent">[f]</span>&nbsp;開啟原始檔</FileLink>
+            <FileLink {doc} class="control inline-flex items-center text-ink hover:text-ink"><span class="text-accent">[f]</span>&nbsp;開啟帳單 PDF</FileLink>
             <button type="button" class="control" disabled={reparsing} onclick={() => void reparse()}><span class="text-accent">[r]</span> 修正 parser 後重新解析</button>
         </div>
         {#if reparseMessage}<p class="m-0 text-neg">{reparseMessage}</p>{/if}

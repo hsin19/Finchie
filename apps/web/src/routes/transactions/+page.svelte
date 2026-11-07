@@ -288,7 +288,7 @@ onKeys({
             </div>
         {/if}
         {#if doc}
-            <FileLink id={doc.id}>原始檔 #{doc.id} {doc.filename} →</FileLink>
+            <FileLink {doc}>原始檔 #{doc.id} {doc.filename} →</FileLink>
         {/if}
     </div>
 {/snippet}

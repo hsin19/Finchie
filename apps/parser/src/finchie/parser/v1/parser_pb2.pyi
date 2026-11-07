@@ -1,3 +1,6 @@
+import datetime
+
+from google.protobuf import timestamp_pb2 as _timestamp_pb2
 from google.type import date_pb2 as _date_pb2
 from google.type import decimal_pb2 as _decimal_pb2
 from google.protobuf.internal import containers as _containers
@@ -37,6 +40,56 @@ class ParseDocumentRequest(_message.Message):
     content_type: str
     content: bytes
     def __init__(self, document_id: _Optional[str] = ..., filename: _Optional[str] = ..., content_type: _Optional[str] = ..., content: _Optional[bytes] = ...) -> None: ...
+
+class OpenDocumentRequest(_message.Message):
+    __slots__ = ("document_id", "filename", "content_type", "content")
+    DOCUMENT_ID_FIELD_NUMBER: _ClassVar[int]
+    FILENAME_FIELD_NUMBER: _ClassVar[int]
+    CONTENT_TYPE_FIELD_NUMBER: _ClassVar[int]
+    CONTENT_FIELD_NUMBER: _ClassVar[int]
+    document_id: str
+    filename: str
+    content_type: str
+    content: bytes
+    def __init__(self, document_id: _Optional[str] = ..., filename: _Optional[str] = ..., content_type: _Optional[str] = ..., content: _Optional[bytes] = ...) -> None: ...
+
+class OpenDocumentResponse(_message.Message):
+    __slots__ = ("email", "files")
+    EMAIL_FIELD_NUMBER: _ClassVar[int]
+    FILES_FIELD_NUMBER: _ClassVar[int]
+    email: Email
+    files: _containers.RepeatedCompositeFieldContainer[File]
+    def __init__(self, email: _Optional[_Union[Email, _Mapping]] = ..., files: _Optional[_Iterable[_Union[File, _Mapping]]] = ...) -> None: ...
+
+class Email(_message.Message):
+    __slots__ = ("sender", "recipient", "subject", "date", "html", "text")
+    SENDER_FIELD_NUMBER: _ClassVar[int]
+    RECIPIENT_FIELD_NUMBER: _ClassVar[int]
+    SUBJECT_FIELD_NUMBER: _ClassVar[int]
+    DATE_FIELD_NUMBER: _ClassVar[int]
+    HTML_FIELD_NUMBER: _ClassVar[int]
+    TEXT_FIELD_NUMBER: _ClassVar[int]
+    sender: str
+    recipient: str
+    subject: str
+    date: _timestamp_pb2.Timestamp
+    html: str
+    text: str
+    def __init__(self, sender: _Optional[str] = ..., recipient: _Optional[str] = ..., subject: _Optional[str] = ..., date: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., html: _Optional[str] = ..., text: _Optional[str] = ...) -> None: ...
+
+class File(_message.Message):
+    __slots__ = ("filename", "content_type", "content", "locked", "primary")
+    FILENAME_FIELD_NUMBER: _ClassVar[int]
+    CONTENT_TYPE_FIELD_NUMBER: _ClassVar[int]
+    CONTENT_FIELD_NUMBER: _ClassVar[int]
+    LOCKED_FIELD_NUMBER: _ClassVar[int]
+    PRIMARY_FIELD_NUMBER: _ClassVar[int]
+    filename: str
+    content_type: str
+    content: bytes
+    locked: bool
+    primary: bool
+    def __init__(self, filename: _Optional[str] = ..., content_type: _Optional[str] = ..., content: _Optional[bytes] = ..., locked: _Optional[bool] = ..., primary: _Optional[bool] = ...) -> None: ...
 
 class ParseDocumentResponse(_message.Message):
     __slots__ = ("parser", "parser_version", "statement", "warnings")

@@ -23,6 +23,7 @@ import (
 	"github.com/riverqueue/river"
 
 	"github.com/hsin19/finchie/apps/backend/internal/db/dbq"
+	parserv1 "github.com/hsin19/finchie/apps/backend/internal/gen/finchie/parser/v1"
 	"github.com/hsin19/finchie/apps/backend/internal/ingest"
 )
 
@@ -31,11 +32,12 @@ const defaultLimit = 100
 type Server struct {
 	pool           *pgxpool.Pool
 	jobs           *river.Client[pgx.Tx]
+	parser         parserv1.ParserServiceClient
 	maxUploadBytes int64
 }
 
-func NewServer(pool *pgxpool.Pool, jobs *river.Client[pgx.Tx], maxUploadBytes int64) *Server {
-	return &Server{pool: pool, jobs: jobs, maxUploadBytes: maxUploadBytes}
+func NewServer(pool *pgxpool.Pool, jobs *river.Client[pgx.Tx], parser parserv1.ParserServiceClient, maxUploadBytes int64) *Server {
+	return &Server{pool: pool, jobs: jobs, parser: parser, maxUploadBytes: maxUploadBytes}
 }
 
 var _ StrictServerInterface = (*Server)(nil)

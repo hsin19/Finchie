@@ -11,6 +11,7 @@ import (
 	decimal "google.golang.org/genproto/googleapis/type/decimal"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -156,6 +157,299 @@ func (x *ParseDocumentRequest) GetContent() []byte {
 	return nil
 }
 
+type OpenDocumentRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The caller's document ID, echoed in logs and traces on both sides.
+	DocumentId string `protobuf:"bytes,1,opt,name=document_id,json=documentId,proto3" json:"document_id,omitempty"`
+	Filename   string `protobuf:"bytes,2,opt,name=filename,proto3" json:"filename,omitempty"`
+	// As in ParseDocumentRequest.
+	ContentType   string `protobuf:"bytes,3,opt,name=content_type,json=contentType,proto3" json:"content_type,omitempty"`
+	Content       []byte `protobuf:"bytes,4,opt,name=content,proto3" json:"content,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *OpenDocumentRequest) Reset() {
+	*x = OpenDocumentRequest{}
+	mi := &file_finchie_parser_v1_parser_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *OpenDocumentRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*OpenDocumentRequest) ProtoMessage() {}
+
+func (x *OpenDocumentRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_finchie_parser_v1_parser_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use OpenDocumentRequest.ProtoReflect.Descriptor instead.
+func (*OpenDocumentRequest) Descriptor() ([]byte, []int) {
+	return file_finchie_parser_v1_parser_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *OpenDocumentRequest) GetDocumentId() string {
+	if x != nil {
+		return x.DocumentId
+	}
+	return ""
+}
+
+func (x *OpenDocumentRequest) GetFilename() string {
+	if x != nil {
+		return x.Filename
+	}
+	return ""
+}
+
+func (x *OpenDocumentRequest) GetContentType() string {
+	if x != nil {
+		return x.ContentType
+	}
+	return ""
+}
+
+func (x *OpenDocumentRequest) GetContent() []byte {
+	if x != nil {
+		return x.Content
+	}
+	return nil
+}
+
+type OpenDocumentResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Unset for a bare PDF.
+	Email *Email `protobuf:"bytes,1,opt,name=email,proto3" json:"email,omitempty"`
+	// The e-mail's attachments in order, or the bare PDF.
+	Files         []*File `protobuf:"bytes,2,rep,name=files,proto3" json:"files,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *OpenDocumentResponse) Reset() {
+	*x = OpenDocumentResponse{}
+	mi := &file_finchie_parser_v1_parser_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *OpenDocumentResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*OpenDocumentResponse) ProtoMessage() {}
+
+func (x *OpenDocumentResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_finchie_parser_v1_parser_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use OpenDocumentResponse.ProtoReflect.Descriptor instead.
+func (*OpenDocumentResponse) Descriptor() ([]byte, []int) {
+	return file_finchie_parser_v1_parser_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *OpenDocumentResponse) GetEmail() *Email {
+	if x != nil {
+		return x.Email
+	}
+	return nil
+}
+
+func (x *OpenDocumentResponse) GetFiles() []*File {
+	if x != nil {
+		return x.Files
+	}
+	return nil
+}
+
+type Email struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Header values with encoded words decoded, e.g. "國泰世華銀行 <bank@example.com>".
+	Sender    string `protobuf:"bytes,1,opt,name=sender,proto3" json:"sender,omitempty"`
+	Recipient string `protobuf:"bytes,2,opt,name=recipient,proto3" json:"recipient,omitempty"`
+	Subject   string `protobuf:"bytes,3,opt,name=subject,proto3" json:"subject,omitempty"`
+	// Unset when the message has no readable Date header.
+	Date *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=date,proto3" json:"date,omitempty"`
+	// The body to show, HTML when the message has it, else plain text; at most
+	// one is set. Images the HTML references by Content-ID are embedded as data:
+	// URIs, so it needs nothing else to display.
+	Html          string `protobuf:"bytes,5,opt,name=html,proto3" json:"html,omitempty"`
+	Text          string `protobuf:"bytes,6,opt,name=text,proto3" json:"text,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Email) Reset() {
+	*x = Email{}
+	mi := &file_finchie_parser_v1_parser_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Email) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Email) ProtoMessage() {}
+
+func (x *Email) ProtoReflect() protoreflect.Message {
+	mi := &file_finchie_parser_v1_parser_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Email.ProtoReflect.Descriptor instead.
+func (*Email) Descriptor() ([]byte, []int) {
+	return file_finchie_parser_v1_parser_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *Email) GetSender() string {
+	if x != nil {
+		return x.Sender
+	}
+	return ""
+}
+
+func (x *Email) GetRecipient() string {
+	if x != nil {
+		return x.Recipient
+	}
+	return ""
+}
+
+func (x *Email) GetSubject() string {
+	if x != nil {
+		return x.Subject
+	}
+	return ""
+}
+
+func (x *Email) GetDate() *timestamppb.Timestamp {
+	if x != nil {
+		return x.Date
+	}
+	return nil
+}
+
+func (x *Email) GetHtml() string {
+	if x != nil {
+		return x.Html
+	}
+	return ""
+}
+
+func (x *Email) GetText() string {
+	if x != nil {
+		return x.Text
+	}
+	return ""
+}
+
+type File struct {
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Filename string                 `protobuf:"bytes,1,opt,name=filename,proto3" json:"filename,omitempty"`
+	// "application/pdf" when the bytes are a PDF, else as the e-mail declares it.
+	ContentType string `protobuf:"bytes,2,opt,name=content_type,json=contentType,proto3" json:"content_type,omitempty"`
+	Content     []byte `protobuf:"bytes,3,opt,name=content,proto3" json:"content,omitempty"`
+	// A PDF that none of the configured passwords opens, returned as received.
+	Locked bool `protobuf:"varint,4,opt,name=locked,proto3" json:"locked,omitempty"`
+	// The one file that stands for the document: the PDF whose name a bank
+	// parser knows as its statement, else the first PDF. None without a PDF.
+	Primary       bool `protobuf:"varint,5,opt,name=primary,proto3" json:"primary,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *File) Reset() {
+	*x = File{}
+	mi := &file_finchie_parser_v1_parser_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *File) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*File) ProtoMessage() {}
+
+func (x *File) ProtoReflect() protoreflect.Message {
+	mi := &file_finchie_parser_v1_parser_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use File.ProtoReflect.Descriptor instead.
+func (*File) Descriptor() ([]byte, []int) {
+	return file_finchie_parser_v1_parser_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *File) GetFilename() string {
+	if x != nil {
+		return x.Filename
+	}
+	return ""
+}
+
+func (x *File) GetContentType() string {
+	if x != nil {
+		return x.ContentType
+	}
+	return ""
+}
+
+func (x *File) GetContent() []byte {
+	if x != nil {
+		return x.Content
+	}
+	return nil
+}
+
+func (x *File) GetLocked() bool {
+	if x != nil {
+		return x.Locked
+	}
+	return false
+}
+
+func (x *File) GetPrimary() bool {
+	if x != nil {
+		return x.Primary
+	}
+	return false
+}
+
 type ParseDocumentResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Which parser handled the document, e.g. "taishin.credit_card".
@@ -172,7 +466,7 @@ type ParseDocumentResponse struct {
 
 func (x *ParseDocumentResponse) Reset() {
 	*x = ParseDocumentResponse{}
-	mi := &file_finchie_parser_v1_parser_proto_msgTypes[1]
+	mi := &file_finchie_parser_v1_parser_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -184,7 +478,7 @@ func (x *ParseDocumentResponse) String() string {
 func (*ParseDocumentResponse) ProtoMessage() {}
 
 func (x *ParseDocumentResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_finchie_parser_v1_parser_proto_msgTypes[1]
+	mi := &file_finchie_parser_v1_parser_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -197,7 +491,7 @@ func (x *ParseDocumentResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ParseDocumentResponse.ProtoReflect.Descriptor instead.
 func (*ParseDocumentResponse) Descriptor() ([]byte, []int) {
-	return file_finchie_parser_v1_parser_proto_rawDescGZIP(), []int{1}
+	return file_finchie_parser_v1_parser_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *ParseDocumentResponse) GetParser() string {
@@ -246,7 +540,7 @@ type Statement struct {
 
 func (x *Statement) Reset() {
 	*x = Statement{}
-	mi := &file_finchie_parser_v1_parser_proto_msgTypes[2]
+	mi := &file_finchie_parser_v1_parser_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -258,7 +552,7 @@ func (x *Statement) String() string {
 func (*Statement) ProtoMessage() {}
 
 func (x *Statement) ProtoReflect() protoreflect.Message {
-	mi := &file_finchie_parser_v1_parser_proto_msgTypes[2]
+	mi := &file_finchie_parser_v1_parser_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -271,7 +565,7 @@ func (x *Statement) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Statement.ProtoReflect.Descriptor instead.
 func (*Statement) Descriptor() ([]byte, []int) {
-	return file_finchie_parser_v1_parser_proto_rawDescGZIP(), []int{2}
+	return file_finchie_parser_v1_parser_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *Statement) GetInstitution() string {
@@ -347,7 +641,7 @@ type Transaction struct {
 
 func (x *Transaction) Reset() {
 	*x = Transaction{}
-	mi := &file_finchie_parser_v1_parser_proto_msgTypes[3]
+	mi := &file_finchie_parser_v1_parser_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -359,7 +653,7 @@ func (x *Transaction) String() string {
 func (*Transaction) ProtoMessage() {}
 
 func (x *Transaction) ProtoReflect() protoreflect.Message {
-	mi := &file_finchie_parser_v1_parser_proto_msgTypes[3]
+	mi := &file_finchie_parser_v1_parser_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -372,7 +666,7 @@ func (x *Transaction) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Transaction.ProtoReflect.Descriptor instead.
 func (*Transaction) Descriptor() ([]byte, []int) {
-	return file_finchie_parser_v1_parser_proto_rawDescGZIP(), []int{3}
+	return file_finchie_parser_v1_parser_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *Transaction) GetTransactionDate() *date.Date {
@@ -453,7 +747,7 @@ type Reconciliation struct {
 
 func (x *Reconciliation) Reset() {
 	*x = Reconciliation{}
-	mi := &file_finchie_parser_v1_parser_proto_msgTypes[4]
+	mi := &file_finchie_parser_v1_parser_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -465,7 +759,7 @@ func (x *Reconciliation) String() string {
 func (*Reconciliation) ProtoMessage() {}
 
 func (x *Reconciliation) ProtoReflect() protoreflect.Message {
-	mi := &file_finchie_parser_v1_parser_proto_msgTypes[4]
+	mi := &file_finchie_parser_v1_parser_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -478,7 +772,7 @@ func (x *Reconciliation) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Reconciliation.ProtoReflect.Descriptor instead.
 func (*Reconciliation) Descriptor() ([]byte, []int) {
-	return file_finchie_parser_v1_parser_proto_rawDescGZIP(), []int{4}
+	return file_finchie_parser_v1_parser_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *Reconciliation) GetBalanced() bool {
@@ -513,13 +807,35 @@ var File_finchie_parser_v1_parser_proto protoreflect.FileDescriptor
 
 const file_finchie_parser_v1_parser_proto_rawDesc = "" +
 	"\n" +
-	"\x1efinchie/parser/v1/parser.proto\x12\x11finchie.parser.v1\x1a\x16google/type/date.proto\x1a\x19google/type/decimal.proto\"\x90\x01\n" +
+	"\x1efinchie/parser/v1/parser.proto\x12\x11finchie.parser.v1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x16google/type/date.proto\x1a\x19google/type/decimal.proto\"\x90\x01\n" +
 	"\x14ParseDocumentRequest\x12\x1f\n" +
 	"\vdocument_id\x18\x01 \x01(\tR\n" +
 	"documentId\x12\x1a\n" +
 	"\bfilename\x18\x02 \x01(\tR\bfilename\x12!\n" +
 	"\fcontent_type\x18\x03 \x01(\tR\vcontentType\x12\x18\n" +
-	"\acontent\x18\x04 \x01(\fR\acontent\"\xae\x01\n" +
+	"\acontent\x18\x04 \x01(\fR\acontent\"\x8f\x01\n" +
+	"\x13OpenDocumentRequest\x12\x1f\n" +
+	"\vdocument_id\x18\x01 \x01(\tR\n" +
+	"documentId\x12\x1a\n" +
+	"\bfilename\x18\x02 \x01(\tR\bfilename\x12!\n" +
+	"\fcontent_type\x18\x03 \x01(\tR\vcontentType\x12\x18\n" +
+	"\acontent\x18\x04 \x01(\fR\acontent\"u\n" +
+	"\x14OpenDocumentResponse\x12.\n" +
+	"\x05email\x18\x01 \x01(\v2\x18.finchie.parser.v1.EmailR\x05email\x12-\n" +
+	"\x05files\x18\x02 \x03(\v2\x17.finchie.parser.v1.FileR\x05files\"\xaf\x01\n" +
+	"\x05Email\x12\x16\n" +
+	"\x06sender\x18\x01 \x01(\tR\x06sender\x12\x1c\n" +
+	"\trecipient\x18\x02 \x01(\tR\trecipient\x12\x18\n" +
+	"\asubject\x18\x03 \x01(\tR\asubject\x12.\n" +
+	"\x04date\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\x04date\x12\x12\n" +
+	"\x04html\x18\x05 \x01(\tR\x04html\x12\x12\n" +
+	"\x04text\x18\x06 \x01(\tR\x04text\"\x91\x01\n" +
+	"\x04File\x12\x1a\n" +
+	"\bfilename\x18\x01 \x01(\tR\bfilename\x12!\n" +
+	"\fcontent_type\x18\x02 \x01(\tR\vcontentType\x12\x18\n" +
+	"\acontent\x18\x03 \x01(\fR\acontent\x12\x16\n" +
+	"\x06locked\x18\x04 \x01(\bR\x06locked\x12\x18\n" +
+	"\aprimary\x18\x05 \x01(\bR\aprimary\"\xae\x01\n" +
 	"\x15ParseDocumentResponse\x12\x16\n" +
 	"\x06parser\x18\x01 \x01(\tR\x06parser\x12%\n" +
 	"\x0eparser_version\x18\x02 \x01(\tR\rparserVersion\x12:\n" +
@@ -556,9 +872,10 @@ const file_finchie_parser_v1_parser_proto_rawDesc = "" +
 	"\x1bTRANSACTION_KIND_ANNUAL_FEE\x10\x03\x12\x1b\n" +
 	"\x17TRANSACTION_KIND_REFUND\x10\x04\x12\x1b\n" +
 	"\x17TRANSACTION_KIND_REBATE\x10\x05\x12\x1c\n" +
-	"\x18TRANSACTION_KIND_PAYMENT\x10\x062s\n" +
+	"\x18TRANSACTION_KIND_PAYMENT\x10\x062\xd4\x01\n" +
 	"\rParserService\x12b\n" +
-	"\rParseDocument\x12'.finchie.parser.v1.ParseDocumentRequest\x1a(.finchie.parser.v1.ParseDocumentResponseB\xda\x01\n" +
+	"\rParseDocument\x12'.finchie.parser.v1.ParseDocumentRequest\x1a(.finchie.parser.v1.ParseDocumentResponse\x12_\n" +
+	"\fOpenDocument\x12&.finchie.parser.v1.OpenDocumentRequest\x1a'.finchie.parser.v1.OpenDocumentResponseB\xda\x01\n" +
 	"\x15com.finchie.parser.v1B\vParserProtoP\x01ZNgithub.com/hsin19/finchie/apps/backend/internal/gen/finchie/parser/v1;parserv1\xa2\x02\x03FPX\xaa\x02\x11Finchie.Parser.V1\xca\x02\x11Finchie\\Parser\\V1\xe2\x02\x1dFinchie\\Parser\\V1\\GPBMetadata\xea\x02\x13Finchie::Parser::V1b\x06proto3"
 
 var (
@@ -574,38 +891,48 @@ func file_finchie_parser_v1_parser_proto_rawDescGZIP() []byte {
 }
 
 var file_finchie_parser_v1_parser_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_finchie_parser_v1_parser_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
+var file_finchie_parser_v1_parser_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
 var file_finchie_parser_v1_parser_proto_goTypes = []any{
 	(TransactionKind)(0),          // 0: finchie.parser.v1.TransactionKind
 	(*ParseDocumentRequest)(nil),  // 1: finchie.parser.v1.ParseDocumentRequest
-	(*ParseDocumentResponse)(nil), // 2: finchie.parser.v1.ParseDocumentResponse
-	(*Statement)(nil),             // 3: finchie.parser.v1.Statement
-	(*Transaction)(nil),           // 4: finchie.parser.v1.Transaction
-	(*Reconciliation)(nil),        // 5: finchie.parser.v1.Reconciliation
-	(*date.Date)(nil),             // 6: google.type.Date
-	(*decimal.Decimal)(nil),       // 7: google.type.Decimal
+	(*OpenDocumentRequest)(nil),   // 2: finchie.parser.v1.OpenDocumentRequest
+	(*OpenDocumentResponse)(nil),  // 3: finchie.parser.v1.OpenDocumentResponse
+	(*Email)(nil),                 // 4: finchie.parser.v1.Email
+	(*File)(nil),                  // 5: finchie.parser.v1.File
+	(*ParseDocumentResponse)(nil), // 6: finchie.parser.v1.ParseDocumentResponse
+	(*Statement)(nil),             // 7: finchie.parser.v1.Statement
+	(*Transaction)(nil),           // 8: finchie.parser.v1.Transaction
+	(*Reconciliation)(nil),        // 9: finchie.parser.v1.Reconciliation
+	(*timestamppb.Timestamp)(nil), // 10: google.protobuf.Timestamp
+	(*date.Date)(nil),             // 11: google.type.Date
+	(*decimal.Decimal)(nil),       // 12: google.type.Decimal
 }
 var file_finchie_parser_v1_parser_proto_depIdxs = []int32{
-	3,  // 0: finchie.parser.v1.ParseDocumentResponse.statement:type_name -> finchie.parser.v1.Statement
-	6,  // 1: finchie.parser.v1.Statement.closing_date:type_name -> google.type.Date
-	6,  // 2: finchie.parser.v1.Statement.due_date:type_name -> google.type.Date
-	7,  // 3: finchie.parser.v1.Statement.total_due:type_name -> google.type.Decimal
-	4,  // 4: finchie.parser.v1.Statement.transactions:type_name -> finchie.parser.v1.Transaction
-	5,  // 5: finchie.parser.v1.Statement.reconciliation:type_name -> finchie.parser.v1.Reconciliation
-	6,  // 6: finchie.parser.v1.Transaction.transaction_date:type_name -> google.type.Date
-	6,  // 7: finchie.parser.v1.Transaction.posting_date:type_name -> google.type.Date
-	0,  // 8: finchie.parser.v1.Transaction.kind:type_name -> finchie.parser.v1.TransactionKind
-	7,  // 9: finchie.parser.v1.Transaction.amount:type_name -> google.type.Decimal
-	7,  // 10: finchie.parser.v1.Transaction.original_amount:type_name -> google.type.Decimal
-	7,  // 11: finchie.parser.v1.Reconciliation.computed:type_name -> google.type.Decimal
-	7,  // 12: finchie.parser.v1.Reconciliation.stated:type_name -> google.type.Decimal
-	1,  // 13: finchie.parser.v1.ParserService.ParseDocument:input_type -> finchie.parser.v1.ParseDocumentRequest
-	2,  // 14: finchie.parser.v1.ParserService.ParseDocument:output_type -> finchie.parser.v1.ParseDocumentResponse
-	14, // [14:15] is the sub-list for method output_type
-	13, // [13:14] is the sub-list for method input_type
-	13, // [13:13] is the sub-list for extension type_name
-	13, // [13:13] is the sub-list for extension extendee
-	0,  // [0:13] is the sub-list for field type_name
+	4,  // 0: finchie.parser.v1.OpenDocumentResponse.email:type_name -> finchie.parser.v1.Email
+	5,  // 1: finchie.parser.v1.OpenDocumentResponse.files:type_name -> finchie.parser.v1.File
+	10, // 2: finchie.parser.v1.Email.date:type_name -> google.protobuf.Timestamp
+	7,  // 3: finchie.parser.v1.ParseDocumentResponse.statement:type_name -> finchie.parser.v1.Statement
+	11, // 4: finchie.parser.v1.Statement.closing_date:type_name -> google.type.Date
+	11, // 5: finchie.parser.v1.Statement.due_date:type_name -> google.type.Date
+	12, // 6: finchie.parser.v1.Statement.total_due:type_name -> google.type.Decimal
+	8,  // 7: finchie.parser.v1.Statement.transactions:type_name -> finchie.parser.v1.Transaction
+	9,  // 8: finchie.parser.v1.Statement.reconciliation:type_name -> finchie.parser.v1.Reconciliation
+	11, // 9: finchie.parser.v1.Transaction.transaction_date:type_name -> google.type.Date
+	11, // 10: finchie.parser.v1.Transaction.posting_date:type_name -> google.type.Date
+	0,  // 11: finchie.parser.v1.Transaction.kind:type_name -> finchie.parser.v1.TransactionKind
+	12, // 12: finchie.parser.v1.Transaction.amount:type_name -> google.type.Decimal
+	12, // 13: finchie.parser.v1.Transaction.original_amount:type_name -> google.type.Decimal
+	12, // 14: finchie.parser.v1.Reconciliation.computed:type_name -> google.type.Decimal
+	12, // 15: finchie.parser.v1.Reconciliation.stated:type_name -> google.type.Decimal
+	1,  // 16: finchie.parser.v1.ParserService.ParseDocument:input_type -> finchie.parser.v1.ParseDocumentRequest
+	2,  // 17: finchie.parser.v1.ParserService.OpenDocument:input_type -> finchie.parser.v1.OpenDocumentRequest
+	6,  // 18: finchie.parser.v1.ParserService.ParseDocument:output_type -> finchie.parser.v1.ParseDocumentResponse
+	3,  // 19: finchie.parser.v1.ParserService.OpenDocument:output_type -> finchie.parser.v1.OpenDocumentResponse
+	18, // [18:20] is the sub-list for method output_type
+	16, // [16:18] is the sub-list for method input_type
+	16, // [16:16] is the sub-list for extension type_name
+	16, // [16:16] is the sub-list for extension extendee
+	0,  // [0:16] is the sub-list for field type_name
 }
 
 func init() { file_finchie_parser_v1_parser_proto_init() }
@@ -619,7 +946,7 @@ func file_finchie_parser_v1_parser_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_finchie_parser_v1_parser_proto_rawDesc), len(file_finchie_parser_v1_parser_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   5,
+			NumMessages:   9,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

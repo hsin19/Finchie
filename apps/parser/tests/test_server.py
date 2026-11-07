@@ -1,10 +1,11 @@
 from collections.abc import Iterator
-from datetime import date
+from datetime import UTC, date, datetime
 from decimal import Decimal
 
 import grpc
 import pytest
 from grpc_health.v1 import health_pb2, health_pb2_grpc
+from pdfs import blank_pdf, statement_email
 
 from finchie.parser.v1 import parser_pb2 as pb
 from finchie.parser.v1 import parser_pb2_grpc
@@ -92,3 +93,36 @@ def test_result_is_converted_to_proto(channel: grpc.Channel, monkeypatch: pytest
     assert payment.kind == pb.TRANSACTION_KIND_PAYMENT
     assert not payment.HasField("posting_date")
     assert not payment.HasField("original_amount")
+
+
+def test_open_document_returns_the_email_and_its_decrypted_attachments() -> None:
+    settings = Settings(ocr=False, workers=1, pdf_passwords={"bank": "secret"})
+    server, port = server_module.build_server(settings, None, "127.0.0.1:0")
+    server.start()
+    try:
+        with grpc.insecure_channel(f"127.0.0.1:{port}") as channel:
+            stub = parser_pb2_grpc.ParserServiceStub(channel)
+            request = pb.OpenDocumentRequest(
+                document_id="d1",
+                filename="mail.eml",
+                content_type="message/rfc822",
+                content=statement_email(blank_pdf("secret")),
+            )
+            response = stub.OpenDocument(request, timeout=10)
+    finally:
+        server.stop(grace=None)
+    assert response.email.subject == "範例銀行 2026年11月 信用卡電子帳單"
+    assert response.email.date.ToDatetime(tzinfo=UTC) == datetime(2026, 11, 6, 1, 30, tzinfo=UTC)
+    assert "data:image/png;base64," in response.email.html
+    assert [(f.filename, f.content_type, f.locked, f.primary) for f in response.files] == [
+        ("帳單_11511.pdf", "application/pdf", False, True),
+        ("slip.html", "text/html", False, False),
+    ]
+
+
+def test_open_document_rejects_an_empty_document(channel: grpc.Channel) -> None:
+    stub = parser_pb2_grpc.ParserServiceStub(channel)
+    request = pb.OpenDocumentRequest(document_id="d1", filename="a.eml", content_type="message/rfc822")
+    with pytest.raises(grpc.RpcError) as error:
+        stub.OpenDocument(request, timeout=10)
+    assert error.value.code() is grpc.StatusCode.INVALID_ARGUMENT

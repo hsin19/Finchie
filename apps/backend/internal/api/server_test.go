@@ -15,10 +15,16 @@ import (
 	"github.com/riverqueue/river"
 	"github.com/riverqueue/river/riverdriver/riverpgxv5"
 
+	parserv1 "github.com/hsin19/finchie/apps/backend/internal/gen/finchie/parser/v1"
 	"github.com/hsin19/finchie/apps/backend/internal/testdb"
 )
 
 func newAPI(t *testing.T, maxUploadBytes int64) (*echo.Echo, *pgxpool.Pool) {
+	t.Helper()
+	return newAPIWithParser(t, maxUploadBytes, nil)
+}
+
+func newAPIWithParser(t *testing.T, maxUploadBytes int64, parser parserv1.ParserServiceClient) (*echo.Echo, *pgxpool.Pool) {
 	t.Helper()
 	pool := testdb.Pool(t)
 	// Insert-only client: jobs are queued but nothing works them in these tests.
@@ -27,7 +33,7 @@ func newAPI(t *testing.T, maxUploadBytes int64) (*echo.Echo, *pgxpool.Pool) {
 		t.Fatal(err)
 	}
 	e := echo.New()
-	RegisterHandlers(e, NewStrictHandler(NewServer(pool, jobs, maxUploadBytes), nil))
+	RegisterHandlers(e, NewStrictHandler(NewServer(pool, jobs, parser, maxUploadBytes), nil))
 	return e, pool
 }
 

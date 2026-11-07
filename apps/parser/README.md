@@ -1,6 +1,6 @@
 # parser
 
-Stateless gRPC service that turns a raw statement (an e-mail or a PDF) into structured data: statement fields, transactions, and a reconciliation of the transactions against the printed total. It keeps no state and talks to nothing but its caller, the backend (ADR 0002). The contract is [`proto/finchie/parser/v1/parser.proto`](../../proto/finchie/parser/v1/parser.proto).
+Stateless gRPC service that turns a raw statement (an e-mail or a PDF) into structured data: statement fields, transactions, and a reconciliation of the transactions against the printed total. It also opens a document for reading (`OpenDocument`, `reading.py`): an e-mail's headers, body, and attachments with the PDFs decrypted, so the web app can show them without the password (ADR 0012). It keeps no state and talks to nothing but its caller, the backend (ADR 0002). The contract is [`proto/finchie/parser/v1/parser.proto`](../../proto/finchie/parser/v1/parser.proto).
 
 ## How a document is parsed
 

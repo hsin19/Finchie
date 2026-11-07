@@ -2,11 +2,13 @@ syntax = "proto3";
 
 package finchie.parser.v1;
 
+import "google/protobuf/timestamp.proto";
 import "google/type/date.proto";
 import "google/type/decimal.proto";
 
-// Turns a raw financial document into structured data. Stateless: the caller
-// owns storage, retries, and deduplication (ADR 0002, ADR 0005).
+// Turns a raw financial document into structured data, and opens one for a
+// person to read. Stateless: the caller owns storage, retries, and
+// deduplication (ADR 0002, ADR 0005).
 service ParserService {
   // Status codes carry the retry decision:
   //   UNIMPLEMENTED       no parser recognizes the document (do not retry)
@@ -16,6 +18,14 @@ service ParserService {
   //   UNAVAILABLE         transient (retry)
   // An unbalanced statement is still OK; see Reconciliation.
   rpc ParseDocument(ParseDocumentRequest) returns (ParseDocumentResponse);
+
+  // Opens a document for a person to read: an e-mail's headers, body, and
+  // attachments, or a bare PDF as its one file. A PDF comes back decrypted
+  // when it opens without a password or with a configured one, so the reader
+  // never needs the password (ADR 0012).
+  //   UNIMPLEMENTED       neither an e-mail nor a PDF
+  //   INVALID_ARGUMENT    the file is unreadable
+  rpc OpenDocument(OpenDocumentRequest) returns (OpenDocumentResponse);
 }
 
 message ParseDocumentRequest {
@@ -25,6 +35,48 @@ message ParseDocumentRequest {
   // "message/rfc822" for an e-mail, "application/pdf" for a bare PDF.
   string content_type = 3;
   bytes content = 4;
+}
+
+message OpenDocumentRequest {
+  // The caller's document ID, echoed in logs and traces on both sides.
+  string document_id = 1;
+  string filename = 2;
+  // As in ParseDocumentRequest.
+  string content_type = 3;
+  bytes content = 4;
+}
+
+message OpenDocumentResponse {
+  // Unset for a bare PDF.
+  Email email = 1;
+  // The e-mail's attachments in order, or the bare PDF.
+  repeated File files = 2;
+}
+
+message Email {
+  // Header values with encoded words decoded, e.g. "國泰世華銀行 <bank@example.com>".
+  string sender = 1;
+  string recipient = 2;
+  string subject = 3;
+  // Unset when the message has no readable Date header.
+  google.protobuf.Timestamp date = 4;
+  // The body to show, HTML when the message has it, else plain text; at most
+  // one is set. Images the HTML references by Content-ID are embedded as data:
+  // URIs, so it needs nothing else to display.
+  string html = 5;
+  string text = 6;
+}
+
+message File {
+  string filename = 1;
+  // "application/pdf" when the bytes are a PDF, else as the e-mail declares it.
+  string content_type = 2;
+  bytes content = 3;
+  // A PDF that none of the configured passwords opens, returned as received.
+  bool locked = 4;
+  // The one file that stands for the document: the PDF whose name a bank
+  // parser knows as its statement, else the first PDF. None without a PDF.
+  bool primary = 5;
 }
 
 message ParseDocumentResponse {

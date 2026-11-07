@@ -12,6 +12,10 @@ Defined spec-first in [`api/openapi.yaml`](api/openapi.yaml); `oapi-codegen` gen
 | `GET` | `/api/documents` | Newest first, `?limit=` up to 500 |
 | `GET` | `/api/documents/{id}` | Status, parser, warnings, error |
 | `GET` | `/api/documents/{id}/content` | The original file. Only PDFs open in the browser; anything else downloads, with `nosniff`. The stored content type comes from the bytes (`%PDF`) or the `.eml` extension, never from what the browser declared, because the file is served from the web app's origin |
+| `GET` | `/api/documents/{id}/preview` | The document opened for reading by the parser: an e-mail's sender, recipient, subject, and date, and its files (the attachments, or the bare PDF). Nothing decrypted is stored ([ADR 0012](../../docs/adr/0012-reading-documents.md)) |
+| `GET` | `/api/documents/{id}/preview/pdf` | The statement PDF, decrypted, in the browser: the file the parser marks primary (the PDF whose name a bank parser knows, else the first PDF). `404` without a PDF |
+| `GET` | `/api/documents/{id}/preview/body` | The e-mail's body as a page for an iframe, sandboxed by its own Content-Security-Policy: no scripts, only `data:` and https images, links to a new tab |
+| `GET` | `/api/documents/{id}/preview/files/{index}` | One file, a PDF decrypted. Only PDFs open in the browser; anything else downloads as `application/octet-stream` with `nosniff` |
 | `POST` | `/api/documents/{id}/reparse` | Parse the stored original again. The document's statement is replaced, so it gets a new id |
 | `GET` | `/api/statements` | Newest closing date first, with each statement's transaction count |
 | `GET` | `/api/statements/{id}` | One statement |

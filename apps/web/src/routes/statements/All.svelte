@@ -79,7 +79,7 @@ async function reparse(id: number) {
                             {s.reconciliation.balanced ? "balanced" : `Δ ${formatAmount(delta, { signed: true })}`}
                         </td>
                         <td class="py-2.5 pl-2 text-dim">
-                            {#if doc}<FileLink id={doc.id} class="text-dim hover:text-ink">#{doc.id} {doc.filename}</FileLink>{/if}
+                            {#if doc}<FileLink {doc} class="text-dim hover:text-ink">#{doc.id} {doc.filename}</FileLink>{/if}
                         </td>
                     </tr>
                 {:else}
@@ -102,7 +102,7 @@ async function reparse(id: number) {
             <div class="flex flex-wrap items-start gap-x-3 gap-y-1 border-t border-rule py-2.5">
                 <Tag status={documentStatus(doc)} />
                 <div class="flex min-w-0 grow flex-col gap-0.5">
-                    <FileLink id={doc.id} class="truncate text-ink hover:text-accent">#{doc.id} {doc.filename}</FileLink>
+                    <FileLink {doc} class="truncate text-ink hover:text-accent">#{doc.id} {doc.filename}</FileLink>
                     <span class="text-[12px] {doc.status === 'failed' ? 'text-neg' : 'text-mute'}">
                         {doc.error ?? (doc.status === "pending" ? "parsing…" : doc.status)}
                     </span>

@@ -6,8 +6,9 @@ from finchie.parser.v1 import parser_pb2 as finchie_dot_parser_dot_v1_dot_parser
 
 
 class ParserServiceStub:
-    """Turns a raw financial document into structured data. Stateless: the caller
-    owns storage, retries, and deduplication (ADR 0002, ADR 0005).
+    """Turns a raw financial document into structured data, and opens one for a
+    person to read. Stateless: the caller owns storage, retries, and
+    deduplication (ADR 0002, ADR 0005).
     """
 
     def __init__(self, channel):
@@ -21,11 +22,17 @@ class ParserServiceStub:
                 request_serializer=finchie_dot_parser_dot_v1_dot_parser__pb2.ParseDocumentRequest.SerializeToString,
                 response_deserializer=finchie_dot_parser_dot_v1_dot_parser__pb2.ParseDocumentResponse.FromString,
                 _registered_method=True)
+        self.OpenDocument = channel.unary_unary(
+                '/finchie.parser.v1.ParserService/OpenDocument',
+                request_serializer=finchie_dot_parser_dot_v1_dot_parser__pb2.OpenDocumentRequest.SerializeToString,
+                response_deserializer=finchie_dot_parser_dot_v1_dot_parser__pb2.OpenDocumentResponse.FromString,
+                _registered_method=True)
 
 
 class ParserServiceServicer:
-    """Turns a raw financial document into structured data. Stateless: the caller
-    owns storage, retries, and deduplication (ADR 0002, ADR 0005).
+    """Turns a raw financial document into structured data, and opens one for a
+    person to read. Stateless: the caller owns storage, retries, and
+    deduplication (ADR 0002, ADR 0005).
     """
 
     def ParseDocument(self, request, context):
@@ -41,6 +48,18 @@ class ParserServiceServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def OpenDocument(self, request, context):
+        """Opens a document for a person to read: an e-mail's headers, body, and
+        attachments, or a bare PDF as its one file. A PDF comes back decrypted
+        when it opens without a password or with a configured one, so the reader
+        never needs the password (ADR 0012).
+        UNIMPLEMENTED       neither an e-mail nor a PDF
+        INVALID_ARGUMENT    the file is unreadable
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_ParserServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -48,6 +67,11 @@ def add_ParserServiceServicer_to_server(servicer, server):
                     servicer.ParseDocument,
                     request_deserializer=finchie_dot_parser_dot_v1_dot_parser__pb2.ParseDocumentRequest.FromString,
                     response_serializer=finchie_dot_parser_dot_v1_dot_parser__pb2.ParseDocumentResponse.SerializeToString,
+            ),
+            'OpenDocument': grpc.unary_unary_rpc_method_handler(
+                    servicer.OpenDocument,
+                    request_deserializer=finchie_dot_parser_dot_v1_dot_parser__pb2.OpenDocumentRequest.FromString,
+                    response_serializer=finchie_dot_parser_dot_v1_dot_parser__pb2.OpenDocumentResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -58,8 +82,9 @@ def add_ParserServiceServicer_to_server(servicer, server):
 
  # This class is part of an EXPERIMENTAL API.
 class ParserService:
-    """Turns a raw financial document into structured data. Stateless: the caller
-    owns storage, retries, and deduplication (ADR 0002, ADR 0005).
+    """Turns a raw financial document into structured data, and opens one for a
+    person to read. Stateless: the caller owns storage, retries, and
+    deduplication (ADR 0002, ADR 0005).
     """
 
     @staticmethod
@@ -79,6 +104,33 @@ class ParserService:
             '/finchie.parser.v1.ParserService/ParseDocument',
             finchie_dot_parser_dot_v1_dot_parser__pb2.ParseDocumentRequest.SerializeToString,
             finchie_dot_parser_dot_v1_dot_parser__pb2.ParseDocumentResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def OpenDocument(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/finchie.parser.v1.ParserService/OpenDocument',
+            finchie_dot_parser_dot_v1_dot_parser__pb2.OpenDocumentRequest.SerializeToString,
+            finchie_dot_parser_dot_v1_dot_parser__pb2.OpenDocumentResponse.FromString,
             options,
             channel_credentials,
             insecure,

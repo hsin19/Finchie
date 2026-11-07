@@ -17,22 +17,30 @@ class Attachment:
     data: bytes
 
 
-def extract_pdfs(filename: str, content_type: str, content: bytes) -> list[Attachment]:
+def classify(filename: str, content_type: str, content: bytes) -> str:
+    """PDF or EMAIL: the bytes decide first, then the declared type or the file name."""
     if not content:
         raise InvalidDocumentError("document is empty")
     if content.startswith(b"%PDF"):
-        return [Attachment(filename or "document.pdf", content)]
+        return PDF
     if content_type == PDF:
         raise InvalidDocumentError("content type says PDF but the bytes are not one")
     if content_type in (EMAIL, "") or filename.lower().endswith(".eml"):
-        return _from_email(content)
+        return EMAIL
     raise UnsupportedDocumentError(f"unsupported content type {content_type!r}")
 
 
-def _from_email(content: bytes) -> list[Attachment]:
+def read_email(content: bytes) -> EmailMessage:
     message = email.message_from_bytes(content, policy=email.policy.default)
     if not isinstance(message, EmailMessage) or not message.keys():
         raise InvalidDocumentError("not an e-mail message")
+    return message
+
+
+def extract_pdfs(filename: str, content_type: str, content: bytes) -> list[Attachment]:
+    if classify(filename, content_type, content) == PDF:
+        return [Attachment(filename or "document.pdf", content)]
+    message = read_email(content)
     attachments = []
     for part in message.walk():
         if part.is_multipart():

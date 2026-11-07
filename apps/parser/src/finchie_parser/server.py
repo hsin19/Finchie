@@ -9,7 +9,7 @@ from grpc_health.v1 import health, health_pb2, health_pb2_grpc
 from grpc_reflection.v1alpha import reflection
 
 from finchie.parser.v1 import parser_pb2, parser_pb2_grpc
-from finchie_parser.convert import to_response
+from finchie_parser.convert import to_open_response, to_response
 from finchie_parser.errors import (
     InvalidDocumentError,
     LayoutError,
@@ -18,6 +18,7 @@ from finchie_parser.errors import (
 )
 from finchie_parser.ocr import Ocr, RapidOcr
 from finchie_parser.pipeline import parse_document
+from finchie_parser.reading import open_document
 from finchie_parser.settings import Settings
 
 log = logging.getLogger("finchie_parser")
@@ -51,11 +52,7 @@ class ParserService(parser_pb2_grpc.ParserServiceServicer):
                 ocr=self._ocr,
             )
         except Exception as error:
-            for error_type, status in _STATUS:
-                if isinstance(error, error_type):
-                    log.warning("document %s rejected (%s): %s", request.document_id, status.name, error)
-                    context.abort(status, str(error))
-            log.exception("document %s failed", request.document_id)
+            _reject(context, request.document_id, error)
             raise
         statement = result.statement
         log.info(
@@ -68,6 +65,25 @@ class ParserService(parser_pb2_grpc.ParserServiceServicer):
             time.monotonic() - started,
         )
         return to_response(result)
+
+    def OpenDocument(  # noqa: N802 - name fixed by the generated base class
+        self, request: parser_pb2.OpenDocumentRequest, context: grpc.ServicerContext
+    ) -> parser_pb2.OpenDocumentResponse:
+        try:
+            opened = open_document(request.filename, request.content_type, request.content, passwords=self._passwords)
+        except Exception as error:
+            _reject(context, request.document_id, error)
+            raise
+        return to_open_response(opened)
+
+
+def _reject(context: grpc.ServicerContext, document_id: str, error: Exception) -> None:
+    """Abort with the status code of a known error; anything else is logged as a bug."""
+    for error_type, status in _STATUS:
+        if isinstance(error, error_type):
+            log.warning("document %s rejected (%s): %s", document_id, status.name, error)
+            context.abort(status, str(error))
+    log.exception("document %s failed", document_id)
 
 
 def build_server(settings: Settings, ocr: Ocr | None, address: str | None = None) -> tuple[grpc.Server, int]:

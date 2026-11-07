@@ -3,10 +3,12 @@
 from datetime import date
 from decimal import Decimal
 
+from google.protobuf import timestamp_pb2
 from google.type import date_pb2, decimal_pb2
 
 from finchie.parser.v1 import parser_pb2 as pb
 from finchie_parser.model import Kind, ParseResult, Statement, Transaction
+from finchie_parser.reading import OpenedDocument
 
 _KINDS = {
     Kind.PURCHASE: pb.TRANSACTION_KIND_PURCHASE,
@@ -25,6 +27,26 @@ def to_response(result: ParseResult) -> pb.ParseDocumentResponse:
         statement=_statement(result.statement),
         warnings=result.warnings,
     )
+
+
+def to_open_response(opened: OpenedDocument) -> pb.OpenDocumentResponse:
+    response = pb.OpenDocumentResponse(
+        files=[
+            pb.File(
+                filename=f.filename, content_type=f.content_type, content=f.data, locked=f.locked, primary=f.primary
+            )
+            for f in opened.files
+        ]
+    )
+    if (mail := opened.email) is not None:
+        response.email.CopyFrom(
+            pb.Email(sender=mail.sender, recipient=mail.recipient, subject=mail.subject, html=mail.html, text=mail.text)
+        )
+        if mail.date is not None:
+            stamp = timestamp_pb2.Timestamp()
+            stamp.FromDatetime(mail.date)
+            response.email.date.CopyFrom(stamp)
+    return response
 
 
 def _statement(statement: Statement) -> pb.Statement:

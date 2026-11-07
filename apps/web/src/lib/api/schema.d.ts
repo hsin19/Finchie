@@ -76,6 +76,92 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/documents/{id}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The document opened for reading
+         * @description An e-mail's headers and attachments, or a bare PDF as its one file. The parser opens the stored
+         *     original on every request and PDFs come back decrypted; nothing decrypted is stored (ADR 0012).
+         */
+        get: operations["getDocumentPreview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/documents/{id}/preview/pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The document's statement PDF, decrypted
+         * @description The primary file of the preview: the PDF whose name a bank parser knows as its statement, else
+         *     the first PDF. It opens in the browser, whose viewer can save the decrypted copy. 404 when the
+         *     document holds no PDF.
+         */
+        get: operations["getDocumentPreviewPdf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/documents/{id}/preview/body": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The e-mail's body as a page of its own, for an iframe
+         * @description The Content-Security-Policy sandboxes the page: no scripts, forms, or plugins, an origin of its
+         *     own, and nothing loaded from elsewhere but https images. Links open in a new tab, without a
+         *     referrer. A plain-text body comes wrapped in a page. 404 for a bare PDF.
+         */
+        get: operations["getDocumentPreviewBody"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/documents/{id}/preview/files/{index}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One file from the preview, a PDF decrypted
+         * @description PDFs open in the browser (inline), so its viewer can save the decrypted copy; anything else
+         *     downloads (attachment) as application/octet-stream.
+         */
+        get: operations["getDocumentPreviewFile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/statements": {
         parameters: {
             query?: never;
@@ -202,6 +288,31 @@ export interface components {
             warnings: string[];
             /** Format: date-time */
             parsedAt?: string;
+        };
+        DocumentPreview: {
+            email?: components["schemas"]["EmailPreview"];
+            /** @description The e-mail's attachments in order, or the bare PDF */
+            files: components["schemas"]["PreviewFile"][];
+        };
+        EmailPreview: {
+            sender: string;
+            recipient: string;
+            subject: string;
+            /** Format: date-time */
+            date?: string;
+            /** @description Whether /preview/body has anything to show */
+            hasBody: boolean;
+        };
+        PreviewFile: {
+            index: number;
+            filename: string;
+            /** @description "application/pdf" when the bytes are a PDF, else as the e-mail declares it */
+            contentType: string;
+            sizeBytes: number;
+            /** @description A PDF none of the parser's passwords opens */
+            locked: boolean;
+            /** @description The one file /preview/pdf serves */
+            primary: boolean;
         };
         Statement: {
             /** Format: int64 */
@@ -447,6 +558,114 @@ export interface operations {
                 };
             };
             404: components["responses"]["Problem"];
+        };
+    };
+    getDocumentPreview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description What the document holds */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentPreview"];
+                };
+            };
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    getDocumentPreviewPdf: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The PDF */
+            200: {
+                headers: {
+                    "Content-Disposition"?: string;
+                    "X-Content-Type-Options"?: "nosniff";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    getDocumentPreviewBody: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The body */
+            200: {
+                headers: {
+                    "Content-Security-Policy"?: string;
+                    "Referrer-Policy"?: "no-referrer";
+                    "X-Content-Type-Options"?: "nosniff";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html; charset=utf-8": string;
+                };
+            };
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    getDocumentPreviewFile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+                index: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The file */
+            200: {
+                headers: {
+                    "Content-Disposition"?: string;
+                    "X-Content-Type-Options"?: "nosniff";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": string;
+                };
+            };
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     listStatements: {

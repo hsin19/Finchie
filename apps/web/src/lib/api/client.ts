@@ -9,8 +9,10 @@ import type {
 type Schemas = components["schemas"];
 export type CardTotal = Schemas["CardTotal"];
 export type Document = Schemas["Document"];
+export type DocumentPreview = Schemas["DocumentPreview"];
 export type DocumentStatus = Schemas["DocumentStatus"];
 export type KindTotal = Schemas["KindTotal"];
+export type PreviewFile = Schemas["PreviewFile"];
 export type Statement = Schemas["Statement"];
 export type Transaction = Schemas["Transaction"];
 export type TransactionFamily = Schemas["TransactionFamily"];
@@ -57,4 +59,18 @@ export function unwrap<R extends Result>(result: R): Data<R> {
 
 export function documentContentUrl(id: number): string {
     return `/api/documents/${id}/content`;
+}
+
+/** The document's statement PDF, decrypted (ADR 0012). */
+export function previewPdfUrl(id: number): string {
+    return `/api/documents/${id}/preview/pdf`;
+}
+
+/** One file of a document opened for reading, a PDF decrypted. */
+export function previewFileUrl(id: number, index: number): string {
+    return `/api/documents/${id}/preview/files/${index}`;
+}
+
+export function previewBodyUrl(id: number): string {
+    return `/api/documents/${id}/preview/body`;
 }

@@ -82,7 +82,11 @@ class PdfDocument:
 
 
 def open_pdf(attachment: Attachment, passwords: Sequence[str]) -> PdfDocument:
-    """Open with no password first, then each configured one; return a decrypted copy."""
+    return PdfDocument(attachment.filename, decrypt(attachment, passwords))
+
+
+def decrypt(attachment: Attachment, passwords: Sequence[str]) -> bytes:
+    """A copy without encryption, opened with no password first, then with each configured one."""
     for password in ("", *passwords):
         try:
             with pikepdf.open(io.BytesIO(attachment.data), password=password) as pdf:
@@ -92,5 +96,5 @@ def open_pdf(attachment: Attachment, passwords: Sequence[str]) -> PdfDocument:
             continue
         except pikepdf.PdfError as error:
             raise InvalidDocumentError(f"{attachment.filename}: unreadable PDF ({error})") from error
-        return PdfDocument(attachment.filename, decrypted.getvalue())
+        return decrypted.getvalue()
     raise PasswordRequiredError(f"{attachment.filename}: none of the configured passwords opens it")

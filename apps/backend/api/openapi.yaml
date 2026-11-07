@@ -105,6 +105,125 @@ paths:
         "404":
           $ref: "#/components/responses/Problem"
 
+  /api/documents/{id}/preview:
+    get:
+      operationId: getDocumentPreview
+      summary: The document opened for reading
+      description: |
+        An e-mail's headers and attachments, or a bare PDF as its one file. The parser opens the stored
+        original on every request and PDFs come back decrypted; nothing decrypted is stored (ADR 0012).
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: What the document holds
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DocumentPreview" }
+        "404":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        "503":
+          $ref: "#/components/responses/Problem"
+
+  /api/documents/{id}/preview/pdf:
+    get:
+      operationId: getDocumentPreviewPdf
+      summary: The document's statement PDF, decrypted
+      description: |
+        The primary file of the preview: the PDF whose name a bank parser knows as its statement, else
+        the first PDF. It opens in the browser, whose viewer can save the decrypted copy. 404 when the
+        document holds no PDF.
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: The PDF
+          headers:
+            Content-Disposition:
+              schema: { type: string }
+            X-Content-Type-Options:
+              schema: { type: string, enum: [nosniff] }
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        "404":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        "503":
+          $ref: "#/components/responses/Problem"
+
+  /api/documents/{id}/preview/body:
+    get:
+      operationId: getDocumentPreviewBody
+      summary: The e-mail's body as a page of its own, for an iframe
+      description: |
+        The Content-Security-Policy sandboxes the page: no scripts, forms, or plugins, an origin of its
+        own, and nothing loaded from elsewhere but https images. Links open in a new tab, without a
+        referrer. A plain-text body comes wrapped in a page. 404 for a bare PDF.
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: The body
+          headers:
+            Content-Security-Policy:
+              schema: { type: string }
+            Referrer-Policy:
+              schema: { type: string, enum: [no-referrer] }
+            X-Content-Type-Options:
+              schema: { type: string, enum: [nosniff] }
+          content:
+            # The charset in the header wins over a <meta charset> left in the e-mail's HTML, which
+            # names the encoding the bank sent, not this UTF-8 copy.
+            text/html; charset=utf-8:
+              schema:
+                type: string
+                format: binary
+        "404":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        "503":
+          $ref: "#/components/responses/Problem"
+
+  /api/documents/{id}/preview/files/{index}:
+    get:
+      operationId: getDocumentPreviewFile
+      summary: One file from the preview, a PDF decrypted
+      description: |
+        PDFs open in the browser (inline), so its viewer can save the decrypted copy; anything else
+        downloads (attachment) as application/octet-stream.
+      parameters:
+        - $ref: "#/components/parameters/Id"
+        - name: index
+          in: path
+          required: true
+          schema: { type: integer, minimum: 0 }
+      responses:
+        "200":
+          description: The file
+          headers:
+            Content-Disposition:
+              schema: { type: string }
+            X-Content-Type-Options:
+              schema: { type: string, enum: [nosniff] }
+          content:
+            "*/*":
+              schema:
+                type: string
+                format: binary
+        "404":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        "503":
+          $ref: "#/components/responses/Problem"
+
   /api/statements:
     get:
       operationId: listStatements
@@ -286,6 +405,37 @@ components:
           type: array
           items: { type: string }
         parsedAt: { type: string, format: date-time }
+
+    DocumentPreview:
+      type: object
+      required: [files]
+      properties:
+        email: { $ref: "#/components/schemas/EmailPreview" }
+        files:
+          type: array
+          description: The e-mail's attachments in order, or the bare PDF
+          items: { $ref: "#/components/schemas/PreviewFile" }
+
+    EmailPreview:
+      type: object
+      required: [sender, recipient, subject, hasBody]
+      properties:
+        sender: { type: string }
+        recipient: { type: string }
+        subject: { type: string }
+        date: { type: string, format: date-time }
+        hasBody: { type: boolean, description: Whether /preview/body has anything to show }
+
+    PreviewFile:
+      type: object
+      required: [index, filename, contentType, sizeBytes, locked, primary]
+      properties:
+        index: { type: integer }
+        filename: { type: string }
+        contentType: { type: string, description: '"application/pdf" when the bytes are a PDF, else as the e-mail declares it' }
+        sizeBytes: { type: integer }
+        locked: { type: boolean, description: A PDF none of the parser's passwords opens, served as received }
+        primary: { type: boolean, description: The one file /preview/pdf serves }
 
     Statement:
       type: object

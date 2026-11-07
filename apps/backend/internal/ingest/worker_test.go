@@ -19,7 +19,9 @@ import (
 	"github.com/hsin19/finchie/apps/backend/internal/testdb"
 )
 
+// fakeParser answers ParseDocument; the worker never calls the embedded (nil) OpenDocument.
 type fakeParser struct {
+	parserv1.ParserServiceClient
 	response *parserv1.ParseDocumentResponse
 	err      error
 	requests []*parserv1.ParseDocumentRequest

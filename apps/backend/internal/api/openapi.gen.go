@@ -139,10 +139,29 @@ type Document struct {
 	Warnings []string       `json:"warnings"`
 }
 
+// DocumentPreview defines model for DocumentPreview.
+type DocumentPreview struct {
+	Email *EmailPreview `json:"email,omitempty"`
+
+	// Files The e-mail's attachments in order, or the bare PDF
+	Files []PreviewFile `json:"files"`
+}
+
 // DocumentStatus pending: queued or being parsed. parsed: reconciled. needs_review: parsed but the
 // transactions don't add up to the statement. duplicate: the same statement came from
 // another document. failed: the parser could not read it (see `error`).
 type DocumentStatus string
+
+// EmailPreview defines model for EmailPreview.
+type EmailPreview struct {
+	Date *time.Time `json:"date,omitempty"`
+
+	// HasBody Whether /preview/body has anything to show
+	HasBody   bool   `json:"hasBody"`
+	Recipient string `json:"recipient"`
+	Sender    string `json:"sender"`
+	Subject   string `json:"subject"`
+}
 
 // KindTotal defines model for KindTotal.
 type KindTotal struct {
@@ -152,6 +171,21 @@ type KindTotal struct {
 	Amount Decimal         `json:"amount"`
 	Count  int             `json:"count"`
 	Kind   TransactionKind `json:"kind"`
+}
+
+// PreviewFile defines model for PreviewFile.
+type PreviewFile struct {
+	// ContentType "application/pdf" when the bytes are a PDF, else as the e-mail declares it
+	ContentType string `json:"contentType"`
+	Filename    string `json:"filename"`
+	Index       int    `json:"index"`
+
+	// Locked A PDF none of the parser's passwords opens
+	Locked bool `json:"locked"`
+
+	// Primary The one file /preview/pdf serves
+	Primary   bool `json:"primary"`
+	SizeBytes int  `json:"sizeBytes"`
 }
 
 // Problem defines model for Problem.
@@ -342,6 +376,18 @@ type ServerInterface interface {
 	// GetDocumentContent The original file exactly as uploaded
 	// (GET /api/documents/{id}/content)
 	GetDocumentContent(ctx *echo.Context, id Id) error
+	// GetDocumentPreview The document opened for reading
+	// (GET /api/documents/{id}/preview)
+	GetDocumentPreview(ctx *echo.Context, id Id) error
+	// GetDocumentPreviewBody The e-mail's body as a page of its own, for an iframe
+	// (GET /api/documents/{id}/preview/body)
+	GetDocumentPreviewBody(ctx *echo.Context, id Id) error
+	// GetDocumentPreviewFile One file from the preview, a PDF decrypted
+	// (GET /api/documents/{id}/preview/files/{index})
+	GetDocumentPreviewFile(ctx *echo.Context, id Id, index int) error
+	// GetDocumentPreviewPdf The document's statement PDF, decrypted
+	// (GET /api/documents/{id}/preview/pdf)
+	GetDocumentPreviewPdf(ctx *echo.Context, id Id) error
 	// ReparseDocument Parse the stored original again, e.g. after a parser fix
 	// (POST /api/documents/{id}/reparse)
 	ReparseDocument(ctx *echo.Context, id Id) error
@@ -423,6 +469,78 @@ func (w *ServerInterfaceWrapper) GetDocumentContent(ctx *echo.Context) error {
 
 	// Invoke the callback with all the unmarshaled arguments
 	err = w.Handler.GetDocumentContent(ctx, id)
+	return err
+}
+
+// GetDocumentPreview converts echo context to params.
+func (w *ServerInterfaceWrapper) GetDocumentPreview(ctx *echo.Context) error {
+	var err error
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", ctx.Param("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: ctx.Request().URL.RawPath == ""})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter id: %s", err))
+	}
+
+	// Invoke the callback with all the unmarshaled arguments
+	err = w.Handler.GetDocumentPreview(ctx, id)
+	return err
+}
+
+// GetDocumentPreviewBody converts echo context to params.
+func (w *ServerInterfaceWrapper) GetDocumentPreviewBody(ctx *echo.Context) error {
+	var err error
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", ctx.Param("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: ctx.Request().URL.RawPath == ""})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter id: %s", err))
+	}
+
+	// Invoke the callback with all the unmarshaled arguments
+	err = w.Handler.GetDocumentPreviewBody(ctx, id)
+	return err
+}
+
+// GetDocumentPreviewFile converts echo context to params.
+func (w *ServerInterfaceWrapper) GetDocumentPreviewFile(ctx *echo.Context) error {
+	var err error
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", ctx.Param("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: ctx.Request().URL.RawPath == ""})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter id: %s", err))
+	}
+
+	// ------------- Path parameter "index" -------------
+	var index int
+
+	err = runtime.BindStyledParameterWithOptions("simple", "index", ctx.Param("index"), &index, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "", ValueIsUnescaped: ctx.Request().URL.RawPath == ""})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter index: %s", err))
+	}
+
+	// Invoke the callback with all the unmarshaled arguments
+	err = w.Handler.GetDocumentPreviewFile(ctx, id, index)
+	return err
+}
+
+// GetDocumentPreviewPdf converts echo context to params.
+func (w *ServerInterfaceWrapper) GetDocumentPreviewPdf(ctx *echo.Context) error {
+	var err error
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", ctx.Param("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: ctx.Request().URL.RawPath == ""})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter id: %s", err))
+	}
+
+	// Invoke the callback with all the unmarshaled arguments
+	err = w.Handler.GetDocumentPreviewPdf(ctx, id)
 	return err
 }
 
@@ -655,6 +773,10 @@ func RegisterHandlersWithOptions(router EchoRouter, si ServerInterface, options 
 	router.GET(options.BaseURL+"/api/documents/:id", wrapper.GetDocument, options.OperationMiddlewares["getDocument"]...)
 	router.POST(options.BaseURL+"/api/documents/:id/reparse", wrapper.ReparseDocument, options.OperationMiddlewares["reparseDocument"]...)
 	router.GET(options.BaseURL+"/api/documents/:id/content", wrapper.GetDocumentContent, options.OperationMiddlewares["getDocumentContent"]...)
+	router.GET(options.BaseURL+"/api/documents/:id/preview", wrapper.GetDocumentPreview, options.OperationMiddlewares["getDocumentPreview"]...)
+	router.GET(options.BaseURL+"/api/documents/:id/preview/pdf", wrapper.GetDocumentPreviewPdf, options.OperationMiddlewares["getDocumentPreviewPdf"]...)
+	router.GET(options.BaseURL+"/api/documents/:id/preview/body", wrapper.GetDocumentPreviewBody, options.OperationMiddlewares["getDocumentPreviewBody"]...)
+	router.GET(options.BaseURL+"/api/documents/:id/preview/files/:index", wrapper.GetDocumentPreviewFile, options.OperationMiddlewares["getDocumentPreviewFile"]...)
 	router.GET(options.BaseURL+"/api/statements", wrapper.ListStatements, options.OperationMiddlewares["listStatements"]...)
 	router.GET(options.BaseURL+"/api/statements/:id", wrapper.GetStatement, options.OperationMiddlewares["getStatement"]...)
 	router.GET(options.BaseURL+"/api/transactions/:id", wrapper.GetTransaction, options.OperationMiddlewares["getTransaction"]...)
@@ -838,6 +960,322 @@ func (response GetDocumentContent404JSONResponse) VisitGetDocumentContentRespons
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetDocumentPreviewRequestObject struct {
+	Id Id `json:"id"`
+}
+
+type GetDocumentPreviewResponseObject interface {
+	VisitGetDocumentPreviewResponse(w http.ResponseWriter) error
+}
+
+type GetDocumentPreview200JSONResponse DocumentPreview
+
+func (response GetDocumentPreview200JSONResponse) VisitGetDocumentPreviewResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetDocumentPreview404JSONResponse struct{ ProblemJSONResponse }
+
+func (response GetDocumentPreview404JSONResponse) VisitGetDocumentPreviewResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetDocumentPreview422JSONResponse Problem
+
+func (response GetDocumentPreview422JSONResponse) VisitGetDocumentPreviewResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetDocumentPreview503JSONResponse Problem
+
+func (response GetDocumentPreview503JSONResponse) VisitGetDocumentPreviewResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetDocumentPreviewBodyRequestObject struct {
+	Id Id `json:"id"`
+}
+
+type GetDocumentPreviewBodyResponseObject interface {
+	VisitGetDocumentPreviewBodyResponse(w http.ResponseWriter) error
+}
+
+type GetDocumentPreviewBody200ResponseHeaders struct {
+	ContentSecurityPolicy *string
+	ReferrerPolicy        *string
+	XContentTypeOptions   *string
+}
+
+type GetDocumentPreviewBody200TexthtmlCharsetUtf8Response struct {
+	Body          io.Reader
+	Headers       GetDocumentPreviewBody200ResponseHeaders
+	ContentLength int64
+}
+
+func (response GetDocumentPreviewBody200TexthtmlCharsetUtf8Response) VisitGetDocumentPreviewBodyResponse(w http.ResponseWriter) error {
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if response.ContentLength != 0 {
+		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	if response.Headers.ContentSecurityPolicy != nil {
+		w.Header().Set("Content-Security-Policy", fmt.Sprint(*response.Headers.ContentSecurityPolicy))
+	}
+	if response.Headers.ReferrerPolicy != nil {
+		w.Header().Set("Referrer-Policy", fmt.Sprint(*response.Headers.ReferrerPolicy))
+	}
+	if response.Headers.XContentTypeOptions != nil {
+		w.Header().Set("X-Content-Type-Options", fmt.Sprint(*response.Headers.XContentTypeOptions))
+	}
+	w.WriteHeader(200)
+
+	if closer, ok := response.Body.(io.ReadCloser); ok {
+		defer closer.Close()
+	}
+	_, err := io.Copy(w, response.Body)
+	return err
+}
+
+type GetDocumentPreviewBody404JSONResponse struct{ ProblemJSONResponse }
+
+func (response GetDocumentPreviewBody404JSONResponse) VisitGetDocumentPreviewBodyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetDocumentPreviewBody422JSONResponse Problem
+
+func (response GetDocumentPreviewBody422JSONResponse) VisitGetDocumentPreviewBodyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetDocumentPreviewBody503JSONResponse Problem
+
+func (response GetDocumentPreviewBody503JSONResponse) VisitGetDocumentPreviewBodyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetDocumentPreviewFileRequestObject struct {
+	Id    Id  `json:"id"`
+	Index int `json:"index"`
+}
+
+type GetDocumentPreviewFileResponseObject interface {
+	VisitGetDocumentPreviewFileResponse(w http.ResponseWriter) error
+}
+
+type GetDocumentPreviewFile200ResponseHeaders struct {
+	ContentDisposition  *string
+	XContentTypeOptions *string
+}
+
+type GetDocumentPreviewFile200AsteriskResponse struct {
+	Body          io.Reader
+	Headers       GetDocumentPreviewFile200ResponseHeaders
+	ContentType   string
+	ContentLength int64
+}
+
+func (response GetDocumentPreviewFile200AsteriskResponse) VisitGetDocumentPreviewFileResponse(w http.ResponseWriter) error {
+
+	w.Header().Set("Content-Type", response.ContentType)
+	if response.ContentLength != 0 {
+		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	if response.Headers.ContentDisposition != nil {
+		w.Header().Set("Content-Disposition", fmt.Sprint(*response.Headers.ContentDisposition))
+	}
+	if response.Headers.XContentTypeOptions != nil {
+		w.Header().Set("X-Content-Type-Options", fmt.Sprint(*response.Headers.XContentTypeOptions))
+	}
+	w.WriteHeader(200)
+
+	if closer, ok := response.Body.(io.ReadCloser); ok {
+		defer closer.Close()
+	}
+	_, err := io.Copy(w, response.Body)
+	return err
+}
+
+type GetDocumentPreviewFile404JSONResponse struct{ ProblemJSONResponse }
+
+func (response GetDocumentPreviewFile404JSONResponse) VisitGetDocumentPreviewFileResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetDocumentPreviewFile422JSONResponse Problem
+
+func (response GetDocumentPreviewFile422JSONResponse) VisitGetDocumentPreviewFileResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetDocumentPreviewFile503JSONResponse Problem
+
+func (response GetDocumentPreviewFile503JSONResponse) VisitGetDocumentPreviewFileResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetDocumentPreviewPdfRequestObject struct {
+	Id Id `json:"id"`
+}
+
+type GetDocumentPreviewPdfResponseObject interface {
+	VisitGetDocumentPreviewPdfResponse(w http.ResponseWriter) error
+}
+
+type GetDocumentPreviewPdf200ResponseHeaders struct {
+	ContentDisposition  *string
+	XContentTypeOptions *string
+}
+
+type GetDocumentPreviewPdf200ApplicationpdfResponse struct {
+	Body          io.Reader
+	Headers       GetDocumentPreviewPdf200ResponseHeaders
+	ContentLength int64
+}
+
+func (response GetDocumentPreviewPdf200ApplicationpdfResponse) VisitGetDocumentPreviewPdfResponse(w http.ResponseWriter) error {
+
+	w.Header().Set("Content-Type", "application/pdf")
+	if response.ContentLength != 0 {
+		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	if response.Headers.ContentDisposition != nil {
+		w.Header().Set("Content-Disposition", fmt.Sprint(*response.Headers.ContentDisposition))
+	}
+	if response.Headers.XContentTypeOptions != nil {
+		w.Header().Set("X-Content-Type-Options", fmt.Sprint(*response.Headers.XContentTypeOptions))
+	}
+	w.WriteHeader(200)
+
+	if closer, ok := response.Body.(io.ReadCloser); ok {
+		defer closer.Close()
+	}
+	_, err := io.Copy(w, response.Body)
+	return err
+}
+
+type GetDocumentPreviewPdf404JSONResponse struct{ ProblemJSONResponse }
+
+func (response GetDocumentPreviewPdf404JSONResponse) VisitGetDocumentPreviewPdfResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetDocumentPreviewPdf422JSONResponse Problem
+
+func (response GetDocumentPreviewPdf422JSONResponse) VisitGetDocumentPreviewPdfResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetDocumentPreviewPdf503JSONResponse Problem
+
+func (response GetDocumentPreviewPdf503JSONResponse) VisitGetDocumentPreviewPdfResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -1044,6 +1482,18 @@ type StrictServerInterface interface {
 	// GetDocumentContent The original file exactly as uploaded
 	// (GET /api/documents/{id}/content)
 	GetDocumentContent(ctx context.Context, request GetDocumentContentRequestObject) (GetDocumentContentResponseObject, error)
+	// GetDocumentPreview The document opened for reading
+	// (GET /api/documents/{id}/preview)
+	GetDocumentPreview(ctx context.Context, request GetDocumentPreviewRequestObject) (GetDocumentPreviewResponseObject, error)
+	// GetDocumentPreviewBody The e-mail's body as a page of its own, for an iframe
+	// (GET /api/documents/{id}/preview/body)
+	GetDocumentPreviewBody(ctx context.Context, request GetDocumentPreviewBodyRequestObject) (GetDocumentPreviewBodyResponseObject, error)
+	// GetDocumentPreviewFile One file from the preview, a PDF decrypted
+	// (GET /api/documents/{id}/preview/files/{index})
+	GetDocumentPreviewFile(ctx context.Context, request GetDocumentPreviewFileRequestObject) (GetDocumentPreviewFileResponseObject, error)
+	// GetDocumentPreviewPdf The document's statement PDF, decrypted
+	// (GET /api/documents/{id}/preview/pdf)
+	GetDocumentPreviewPdf(ctx context.Context, request GetDocumentPreviewPdfRequestObject) (GetDocumentPreviewPdfResponseObject, error)
 	// ReparseDocument Parse the stored original again, e.g. after a parser fix
 	// (POST /api/documents/{id}/reparse)
 	ReparseDocument(ctx context.Context, request ReparseDocumentRequestObject) (ReparseDocumentResponseObject, error)
@@ -1174,6 +1624,107 @@ func (sh *strictHandler) GetDocumentContent(ctx *echo.Context, id Id) error {
 		return err
 	} else if validResponse, ok := response.(GetDocumentContentResponseObject); ok {
 		return validResponse.VisitGetDocumentContentResponse(ctx.Response())
+	} else if response != nil {
+		return fmt.Errorf("unexpected response type: %T", response)
+	}
+	return nil
+}
+
+// GetDocumentPreview operation middleware
+func (sh *strictHandler) GetDocumentPreview(ctx *echo.Context, id Id) error {
+	var request GetDocumentPreviewRequestObject
+
+	request.Id = id
+
+	handler := func(ctx *echo.Context, request interface{}) (interface{}, error) {
+		return sh.ssi.GetDocumentPreview(ctx.Request().Context(), request.(GetDocumentPreviewRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetDocumentPreview")
+	}
+
+	response, err := handler(ctx, request)
+
+	if err != nil {
+		return err
+	} else if validResponse, ok := response.(GetDocumentPreviewResponseObject); ok {
+		return validResponse.VisitGetDocumentPreviewResponse(ctx.Response())
+	} else if response != nil {
+		return fmt.Errorf("unexpected response type: %T", response)
+	}
+	return nil
+}
+
+// GetDocumentPreviewBody operation middleware
+func (sh *strictHandler) GetDocumentPreviewBody(ctx *echo.Context, id Id) error {
+	var request GetDocumentPreviewBodyRequestObject
+
+	request.Id = id
+
+	handler := func(ctx *echo.Context, request interface{}) (interface{}, error) {
+		return sh.ssi.GetDocumentPreviewBody(ctx.Request().Context(), request.(GetDocumentPreviewBodyRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetDocumentPreviewBody")
+	}
+
+	response, err := handler(ctx, request)
+
+	if err != nil {
+		return err
+	} else if validResponse, ok := response.(GetDocumentPreviewBodyResponseObject); ok {
+		return validResponse.VisitGetDocumentPreviewBodyResponse(ctx.Response())
+	} else if response != nil {
+		return fmt.Errorf("unexpected response type: %T", response)
+	}
+	return nil
+}
+
+// GetDocumentPreviewFile operation middleware
+func (sh *strictHandler) GetDocumentPreviewFile(ctx *echo.Context, id Id, index int) error {
+	var request GetDocumentPreviewFileRequestObject
+
+	request.Id = id
+	request.Index = index
+
+	handler := func(ctx *echo.Context, request interface{}) (interface{}, error) {
+		return sh.ssi.GetDocumentPreviewFile(ctx.Request().Context(), request.(GetDocumentPreviewFileRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetDocumentPreviewFile")
+	}
+
+	response, err := handler(ctx, request)
+
+	if err != nil {
+		return err
+	} else if validResponse, ok := response.(GetDocumentPreviewFileResponseObject); ok {
+		return validResponse.VisitGetDocumentPreviewFileResponse(ctx.Response())
+	} else if response != nil {
+		return fmt.Errorf("unexpected response type: %T", response)
+	}
+	return nil
+}
+
+// GetDocumentPreviewPdf operation middleware
+func (sh *strictHandler) GetDocumentPreviewPdf(ctx *echo.Context, id Id) error {
+	var request GetDocumentPreviewPdfRequestObject
+
+	request.Id = id
+
+	handler := func(ctx *echo.Context, request interface{}) (interface{}, error) {
+		return sh.ssi.GetDocumentPreviewPdf(ctx.Request().Context(), request.(GetDocumentPreviewPdfRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetDocumentPreviewPdf")
+	}
+
+	response, err := handler(ctx, request)
+
+	if err != nil {
+		return err
+	} else if validResponse, ok := response.(GetDocumentPreviewPdfResponseObject); ok {
+		return validResponse.VisitGetDocumentPreviewPdfResponse(ctx.Response())
 	} else if response != nil {
 		return fmt.Errorf("unexpected response type: %T", response)
 	}
